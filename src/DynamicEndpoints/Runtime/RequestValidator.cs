@@ -22,20 +22,60 @@ internal static class RequestValidator
             switch (value)
             {
                 case JsonValue v when v.TryGetValue<string>(out var s) && !IsMatch(regex, s):
-                    errors.Add(key, $"The value does not match the pattern '{regex}'.");
+                    errors.Add(key, ErrorMessage.Of("pattern", DynamicValidationCodes.Pattern, regex.ToString()));
                     break;
                 case JsonArray array:
                     for (var i = 0; i < array.Count; i++)
                     {
                         if (array[i] is JsonValue item && item.TryGetValue<string>(out var itemValue) && !IsMatch(regex, itemValue))
                         {
-                            errors.Add($"{key}[{i}]", $"The value does not match the pattern '{regex}'.");
+                            errors.Add($"{key}[{i}]", ErrorMessage.Of("pattern", DynamicValidationCodes.Pattern, regex.ToString()));
                         }
                     }
 
                     break;
             }
         }
+
+        foreach (var parameter in endpoint.Parameters)
+        {
+            var p = parameter.Definition;
+            if ((p.MaxFileSize is not null || p.AllowedContentTypes is not null) && values[p.Name] is { } files)
+            {
+                ValidateFiles(p, files, errors);
+            }
+        }
+    }
+
+    private static void ValidateFiles(ParameterDefinition p, JsonNode files, ValidationErrors errors)
+    {
+        var key = p.EffectiveSourceName;
+        var items = files is JsonArray array ? array.Select((f, i) => (f, $"{key}[{i}]")) : [(files, key)];
+        foreach (var (file, itemKey) in items)
+        {
+            if (p.MaxFileSize is { } max && file?["length"]?.GetValue<long>() > max)
+            {
+                errors.Add(itemKey, ErrorMessage.Counted("file.maxSize", DynamicValidationCodes.FileSize, max, max));
+            }
+
+            var contentType = file?["contentType"]?.GetValue<string>() ?? string.Empty;
+            if (p.AllowedContentTypes is { Count: > 0 } allowed && !allowed.Any(a => ContentTypeMatches(a, contentType)))
+            {
+                errors.Add(itemKey, ErrorMessage.Of("file.contentType", DynamicValidationCodes.FileType, contentType, string.Join(", ", allowed)));
+            }
+        }
+    }
+
+    /// <summary><c>image/*</c> matches <c>image/png</c>; parameters (<c>; charset=…</c>) are ignored.</summary>
+    internal static bool ContentTypeMatches(string allowed, string actual)
+    {
+        static string Bare(string value) => value.Split(';', 2)[0].Trim();
+        var pattern = Bare(allowed);
+        var type = Bare(actual);
+        return pattern == "*/*" ||
+            (pattern.EndsWith("/*", StringComparison.Ordinal)
+                ? type.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase)
+                : string.Equals(pattern, type, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Business rules – only evaluated when the request is structurally valid.</summary>
@@ -56,7 +96,7 @@ internal static class RequestValidator
             if (!passed)
             {
                 var key = rule.Definition.Parameter is { } name ? SourceName(endpoint, name) : "request";
-                errors.Add(key, rule.Definition.Message);
+                errors.Add(key, rule.Definition.Message, rule.Definition.Code ?? DynamicValidationCodes.Rule);
             }
         }
     }

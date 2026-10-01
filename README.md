@@ -52,8 +52,11 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 |---|---|
 | 🔥 **Hot endpoints** | Add, change, disable and delete endpoints at runtime. Routing swaps atomically, so a request never sees a half-applied state. |
 | 💾 **Persistent** | Stored with EF Core (any provider) and loaded on start-up. Optimistic concurrency included. |
-| 🧩 **Declarative binding** | Route, query, header and JSON body parameters with types, defaults and request names (`X-Tenant-Id` → `tenantId`). |
+| 🧩 **Declarative binding** | Route, query, header, JSON body and form parameters with types, defaults and request names (`X-Tenant-Id` → `tenantId`). |
+| 📎 **File uploads** | `multipart/form-data` with size and content-type limits, streamed by ASP.NET Core. No base64, documented as binary in OpenAPI. |
 | 🛡️ **Four layers of validation** | JSON Schema constraints, custom C# validators, JsonLogic business rules, FluentValidation. |
+| 🪝 **Filters** | Access checks before validation, your own error format, logging and metering of rejected requests. |
+| 🌍 **Localized errors** | English and Polish built in, every message overridable, stable error codes for clients. |
 | 📧 **Built-in formats** | E-mail, URI, phone (E.164), IPv4/IPv6, time, date, date-time, UUID. No code needed. |
 | 🪶 **Zero dependencies** | The core depends on ASP.NET Core only. The JSON Schema subset and the JsonLogic engine are built in. |
 | ⚙️ **Processors** | Your code, your DI, your database. Validated input goes to a regular, statically typed handler. |
@@ -146,14 +149,17 @@ public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderCon
 ```mermaid
 flowchart LR
     A[HTTP request] --> B{Route match<br/><i>dynamic EndpointDataSource</i>}
-    B --> C[Binding<br/>route · query · header · body]
+    B --> P[Filters: OnRequestAsync<br/><i>access checks</i>]
+    P --> C[Binding<br/>route · query · header · body · form]
     C --> D[Type conversion]
     D --> E[JSON Schema<br/>+ parameter validators]
     E --> F[JsonLogic<br/>business rules]
     F --> G[Request validators<br/><i>DB lookups etc.</i>]
     G --> H[IDynamicEndpointProcessor<br/><b>your code</b>]
     H --> I[IResult]
-    E -. errors .-> X[400 ValidationProblemDetails<br/>all errors at once]
+    P -. short-circuit .-> Y[e.g. 403]
+    C -. 413 / 415 / bad body .-> X
+    E -. errors .-> X[Filters: OnValidationFailedAsync<br/>default: 400 ValidationProblemDetails]
     F -. errors .-> X
     G -. errors .-> X
 ```
@@ -177,7 +183,7 @@ sequenceDiagram
 - **Compile once.** On save, a definition is validated as a whole and compiled: route pattern, schema, regexes, rules, processor and validator configs, validator ↔ parameter type compatibility. A broken definition never reaches the routing table.
 - **Built-in engines.** A JSON Schema 2020-12 subset (`type`, `properties`, `required`, `additionalProperties`, `items`, length/range/count limits, `enum`, `const`, `format`, `uniqueItems`, `multipleOf`) and a [JsonLogic](https://jsonlogic.com) evaluator with the reference JavaScript semantics. Unsupported schema keywords and unknown operators are **rejected on save**, never silently ignored.
 - **Conflicts.** Detected on save: `/orders/{id}` vs `/Orders/{orderId:int}`, clashes with the app's own endpoints, reserved prefixes.
-- **Persistence.** Searchable fields are columns, the full definition is JSON, so the model can grow without migrations. `Version` is a DB concurrency token.
+- **Persistence.** Searchable fields are columns, the full definition is JSON, so the model can grow without migrations. `Revision` is a DB concurrency token.
 
 ## 🛡️ Validation: four layers, zero recompiles
 
@@ -193,6 +199,8 @@ sequenceDiagram
 | **Request validators** | developer, attached by admin | "title must be unique" (DB lookup), credit limits | last, only for otherwise valid requests |
 
 Errors come back as RFC 9457 `ValidationProblemDetails`, keyed by the names the client used (`X-Tenant-Id`, `address.city`, `tags[1]`).
+Each error also has a stable code (`required`, `minLength`, `format`, `fileSize`, …) for your own error format (see *Filters* below).
+A body that isn't valid JSON or valid UTF-8 is a `400`, never a `500`.
 
 <details>
 <summary><b>Custom C# validator</b></summary>
@@ -243,10 +251,10 @@ builder.Services.AddDynamicEndpoints().AddFluentValidatorsFromAssemblyContaining
 | Area | What admins can set |
 |---|---|
 | Endpoint | method, route template (`/orders/{id}`), name, description, group (section in Swagger UI), enabled |
-| Parameters | source (`Route`, `Query`, `Header`, `Body`), name in request, type (`String`, `Integer`, `Number`, `Boolean`, `Date`, `DateTime`, `Guid`, `Array`, `Object`), required, default, example |
-| Constraints | min/max length, minimum/maximum, regex pattern, allowed values, min/max items, custom JSON Schema for objects/arrays |
+| Parameters | source (`Route`, `Query`, `Header`, `Body`, `Form`), name in request, type (`String`, `Integer`, `Number`, `Boolean`, `Date`, `DateTime`, `Guid`, `Array`, `Object`, `File`), required, default, example |
+| Constraints | min/max length, minimum/maximum, regex pattern, allowed values, min/max items, custom JSON Schema for objects/arrays, max file size, allowed content types |
 | Formats | `Email`, `Uri`, `Phone` (E.164), `Ipv4`, `Ipv6`, `Time` for strings; `Date`, `DateTime`, `Guid` as types |
-| Rules | [JsonLogic](https://jsonlogic.com) conditions with an error message and a target parameter |
+| Rules | [JsonLogic](https://jsonlogic.com) conditions with an error message, an optional error code and a target parameter |
 | Custom validators | code validators attached to parameters or to the whole request, with optional configuration |
 | Processing | processor name and configuration (JSON) |
 | Security | allow anonymous, require authorization, authorization policy, rate limiting policy |
@@ -260,7 +268,7 @@ Every operation validates, persists and swaps the routing table atomically. Inje
 
 ```csharp
 await manager.CreateAsync(definition);
-await manager.UpdateAsync(definition with { Route = "/v2/orders" });   // optimistic concurrency via Version
+await manager.UpdateAsync(definition with { Route = "/v2/orders" });   // optimistic concurrency via Revision
 await manager.SetEnabledAsync(id, false);
 await manager.DeleteAsync(id);
 var check = await manager.ValidateAsync(definition);                   // dry run
@@ -278,7 +286,7 @@ The sample's `Greetings/` folder shows a purpose-built API on top of the manager
 | `GET` | `/` | all definitions with runtime status (`Active`, `Disabled`, `Invalid`, `Pending`) |
 | `GET` | `/{id}` | single definition |
 | `POST` | `/` | create & publish |
-| `PUT` | `/{id}` | replace (requires matching `version`) |
+| `PUT` | `/{id}` | replace (requires matching `revision`) |
 | `DELETE` | `/{id}` | delete |
 | `POST` | `/{id}/enable` · `/{id}/disable` | toggle |
 | `POST` | `/validate` | dry run |
@@ -307,14 +315,114 @@ builder.Services.AddDynamicEndpoints()
 </details>
 
 <details>
+<summary><b>File uploads &amp; forms</b></summary>
+
+`Form` parameters read `multipart/form-data` or `application/x-www-form-urlencoded` bodies. Text fields are converted like query
+parameters. Files are streamed by ASP.NET Core (to disk above a small threshold), so there is no base64 and no double buffering.
+
+```csharp
+DynamicEndpoint.Post("/documents")
+    .HandledBy<DocumentProcessor>()
+    .FromForm("title", p => p.Required().MaxLength(100))
+    .FromForm("document", p => p.File(maxSize: 10 * 1024 * 1024, "application/pdf", "image/*").Required())
+    .FromForm("attachments", p => p.Files(maxSize: 1024 * 1024).Items(0, 5));
+
+// in the processor (or a validator)
+var file = request.GetFile("document");                 // IFormFile
+await using var stream = file!.OpenReadStream();
+```
+
+- In `request.Parameters` (and in JsonLogic rules) a file is its metadata: `{ "fileName", "contentType", "length" }`.
+- `AllowedContentTypes` is checked against the `Content-Type` the client sent. Inspect the content when it matters.
+- An endpoint reads either a JSON body or a form, not both. The overall form size limit is `MaxFormBodySize` (30 MB).
+- OpenAPI documents the body as `multipart/form-data` with `format: binary` file fields, so Swagger UI shows a file picker.
+</details>
+
+<details>
+<summary><b>Filters: access checks, error format, metering</b></summary>
+
+```csharp
+builder.Services.AddDynamicEndpoints().AddFilter<TenantFeatureFilter>();   // scoped, run in registration order
+
+public sealed class TenantFeatureFilter(ITenantFeatures features, IMeter meter) : IDynamicEndpointFilter
+{
+    // After routing and authorization, before the body is read or validated.
+    public async ValueTask OnRequestAsync(DynamicEndpointRequestContext context)
+    {
+        if (!await features.HasAccessAsync(context.HttpContext, context.Endpoint.Definition.Group))
+            context.Result = Results.Problem(statusCode: 403, title: "Feature not available");   // short-circuits
+    }
+
+    // Validation errors (400), malformed or undecodable bodies (400), 413 and 415.
+    public ValueTask OnValidationFailedAsync(DynamicValidationFailedContext context)
+    {
+        meter.Rejected(context.Endpoint.Id, context.Reason);
+        context.Result = Results.Json(new
+        {
+            apiVersion = "1.0",
+            error = new { code = "VALIDATION_FAILED", message = context.Title,
+                          details = context.Errors.Select(e => new { e.Key, e.Code, e.Message }) },
+        }, statusCode: context.StatusCode);
+        return ValueTask.CompletedTask;
+    }
+}
+```
+
+Both methods are optional, and `AddFilter(onRequest: …, onValidationFailed: …)` registers one inline. `context.Result` starts
+with the default problem response, so a filter that only logs leaves it alone. Custom validators can report codes too:
+`context.AddError(path, message, code)`.
+
+The routed endpoint carries the complete definition, so your own middleware doesn't need the store either:
+`context.GetEndpoint()?.Metadata.GetMetadata<DynamicEndpointMetadata>()` gives `Definition`, `ProcessorName`, `Parameters`,
+`HasFiles` and friends.
+</details>
+
+<details>
+<summary><b>Localized error messages</b></summary>
+
+English and Polish are built in, with proper plural forms ("2 znaki", "5 znaków").
+
+```csharp
+builder.Services.AddDynamicEndpoints(o =>
+{
+    o.Messages.DefaultCulture = "pl";                                    // always Polish…
+    o.Messages.UseRequestCulture = true;                                 // …or per request (app.UseRequestLocalization())
+    o.Messages.Set("pl", "required.header", "Brak nagłówka {0}.");       // override a single text
+    o.Messages.Set("de", "minLength", "Mindestens {0} Zeichen.");        // add a language
+    o.Messages.Localizer = c => localizer[c.Key, c.Arguments.ToArray()]; // or route everything through IStringLocalizer
+});
+```
+
+Keys follow the error codes (`minLength`, `format.email`, `required.query`, `type.integer`, `file.maxSize`, …), and
+`DynamicValidationMessages.Keys` lists them all. Rule messages are whatever the admin wrote.
+</details>
+
+<details>
+<summary><b>OpenAPI: security schemes, common headers, hooks</b></summary>
+
+```csharp
+builder.Services.AddDynamicEndpoints(o =>
+{
+    o.OpenApi.AddApiKey("X-Api-Key");                                    // securitySchemes + global requirement
+    o.OpenApi.AddHeader("X-End-User", "End user the call is made for.");
+    o.OpenApi.AddHeader("Idempotency-Key", "Makes retries safe.", appliesTo: d => d.Method != "GET");
+    o.OpenApi.ConfigureOperation = (operation, definition) => { /* x-extensions, extra responses */ };
+    o.OpenApi.ConfigureDocument = document => { /* servers, your error schema */ };
+});
+```
+</details>
+
+<details>
 <summary><b>Options</b></summary>
 
 ```csharp
 builder.Services.AddDynamicEndpoints(o =>
 {
     o.ReservedPrefixes.Add("/internal");          // never usable by dynamic endpoints
+    o.RequiredRoutePrefixes.Add("/api/v{version:int}");  // every route must start with /api/v1, /api/v2, …
     o.DefaultProcessor = "orders";                // when a definition names none
-    o.MaxRequestBodySize = 1024 * 1024;           // bytes
+    o.MaxRequestBodySize = 1024 * 1024;           // JSON bodies, bytes
+    o.MaxFormBodySize = 30 * 1024 * 1024;         // form bodies with all their files, bytes
     o.MaxJsonDepth = 32;
     o.RefreshInterval = TimeSpan.FromSeconds(30); // multi-instance polling
     o.ThrowOnStartupLoadFailure = true;
@@ -351,7 +459,7 @@ Each instance keeps its own routing table:
 
 - 🚫 **Nothing is executed from definitions.** JsonLogic is a closed set of operators. There's no scripting and no Roslyn.
 - 🧨 **ReDoS-proof:** regex constraints run on `RegexOptions.NonBacktracking`. Backreferences and lookarounds are rejected on save.
-- 📏 **Limits:** body size (1 MB) and JSON depth (32) by default.
+- 📏 **Limits:** JSON body size (1 MB), form body size (30 MB) and JSON depth (32) by default. Bodies that aren't valid UTF-8 are rejected.
 - 🧱 **Reserved prefixes:** the admin API is protected automatically, the rest via options. Clashes with the app's own endpoints are rejected.
 - 🔑 **Policies:** authorization policies referenced by definitions must exist when the definition is saved.
 - ⚠️ **The admin API is open by default.** Put `.RequireAuthorization(...)` on it.

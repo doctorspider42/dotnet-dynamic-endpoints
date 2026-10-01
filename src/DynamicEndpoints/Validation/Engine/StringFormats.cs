@@ -8,26 +8,26 @@ namespace DynamicEndpoints.Validation.Engine;
 /// <summary>String formats understood by the schema validator (JSON Schema <c>format</c> keyword).</summary>
 internal static partial class StringFormats
 {
-    private static readonly Dictionary<string, (Func<string, bool> IsValid, string Description)> Formats = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, Func<string, bool>> Formats = new(StringComparer.Ordinal)
     {
-        ["date"] = (IsDate, "a date in the format YYYY-MM-DD"),
-        ["date-time"] = (IsDateTime, "an RFC 3339 date-time with an offset, e.g. 2026-01-31T12:00:00Z"),
-        ["time"] = (IsTime, "a time in the format HH:mm or HH:mm:ss"),
-        ["uuid"] = (IsUuid, "a UUID"),
-        ["email"] = (IsEmail, "a valid e-mail address"),
-        ["uri"] = (IsUri, "an absolute URI, e.g. https://example.com"),
-        ["phone"] = (IsPhone, "a phone number in E.164 format, e.g. +48123456789"),
-        ["ipv4"] = (IsIpv4, "an IPv4 address"),
-        ["ipv6"] = (IsIpv6, "an IPv6 address"),
+        ["date"] = IsDate,
+        ["date-time"] = IsDateTime,
+        ["time"] = IsTime,
+        ["uuid"] = IsUuid,
+        ["email"] = IsEmail,
+        ["uri"] = IsUri,
+        ["phone"] = IsPhone,
+        ["ipv4"] = IsIpv4,
+        ["ipv6"] = IsIpv6,
     };
 
     public static IEnumerable<string> Names => Formats.Keys;
 
     public static bool IsKnown(string format) => Formats.ContainsKey(format);
 
-    /// <returns><c>null</c> when valid (or the format is unknown), otherwise an error message.</returns>
-    public static string? Check(string format, string value) =>
-        Formats.TryGetValue(format, out var f) && !f.IsValid(value) ? $"Must be {f.Description}." : null;
+    /// <returns><c>null</c> when valid (or the format is unknown), otherwise the error (message key <c>format.{name}</c>).</returns>
+    public static ErrorMessage? Check(string format, string value) =>
+        Formats.TryGetValue(format, out var isValid) && !isValid(value) ? ErrorMessage.Of($"format.{format}", DynamicValidationCodes.Format) : null;
 
     public static string ToSchemaName(ParameterFormat format) => format switch
     {

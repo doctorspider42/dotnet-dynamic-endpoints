@@ -48,7 +48,7 @@ internal sealed class DynamicEndpointManager(
             var d = DefinitionNormalizer.Normalize(definition) with
             {
                 Id = definition.Id == Guid.Empty ? Guid.CreateVersion7() : definition.Id,
-                Version = 1,
+                Revision = 1,
                 CreatedAt = now,
                 UpdatedAt = now,
             };
@@ -83,23 +83,23 @@ internal sealed class DynamicEndpointManager(
             var store = scope.ServiceProvider.GetRequiredService<IDynamicEndpointStore>();
             var current = await store.FindAsync(definition.Id, cancellationToken)
                 ?? throw new DynamicEndpointNotFoundException(definition.Id);
-            if (current.Version != definition.Version)
+            if (current.Revision != definition.Revision)
             {
-                throw new DynamicEndpointConcurrencyException(definition.Id, definition.Version, current.Version);
+                throw new DynamicEndpointConcurrencyException(definition.Id, definition.Revision, current.Revision);
             }
 
             var d = DefinitionNormalizer.Normalize(definition) with
             {
-                Version = current.Version + 1,
+                Revision = current.Revision + 1,
                 CreatedAt = current.CreatedAt,
                 UpdatedAt = timeProvider.GetUtcNow(),
             };
 
             var compiled = await CompileOrThrowAsync(d, cancellationToken);
-            await store.UpdateAsync(d, current.Version, cancellationToken);
+            await store.UpdateAsync(d, current.Revision, cancellationToken);
             runtime.Upsert(new RuntimeEntry(d, compiled, []));
 
-            logger.LogInformation("Updated dynamic endpoint {Method} {Route} ({Id}) to version {Version}.", d.Method, d.Route, d.Id, d.Version);
+            logger.LogInformation("Updated dynamic endpoint {Method} {Route} ({Id}) to revision {Revision}.", d.Method, d.Route, d.Id, d.Revision);
             return DynamicEndpointsJson.DeepClone(d);
         }
         finally
@@ -160,7 +160,7 @@ internal sealed class DynamicEndpointManager(
                 CompiledEndpoint? compiled;
                 List<string> errors;
                 if (existing?.Compiled is not null &&
-                    existing.Definition.Version == definition.Version &&
+                    existing.Definition.Revision == definition.Revision &&
                     existing.Definition.UpdatedAt == definition.UpdatedAt)
                 {
                     compiled = existing.Compiled;
@@ -225,7 +225,7 @@ internal sealed class DynamicEndpointManager(
     private DynamicEndpointState ToState(DynamicEndpointDefinition definition)
     {
         var entry = runtime.Find(definition.Id);
-        if (entry is null || entry.Definition.Version != definition.Version)
+        if (entry is null || entry.Definition.Revision != definition.Revision)
         {
             return new DynamicEndpointState(definition, DynamicEndpointStatus.Pending, []);
         }

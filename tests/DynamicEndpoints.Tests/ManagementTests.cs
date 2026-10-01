@@ -11,11 +11,11 @@ public sealed class ManagementTests
     {
         await using var host = await TestHost.StartAsync();
         var created = await host.Manager.CreateAsync(DynamicEndpoint.Get("/hi/{name}").HandledBy("greeting", new { greeting = "Hello" }).FromRoute("name"));
-        Assert.Equal(1, created.Version);
+        Assert.Equal(1, created.Revision);
 
         var updated = await host.Manager.UpdateAsync(created with { ProcessorConfig = new JsonObject { ["greeting"] = "Cześć" } });
 
-        Assert.Equal(2, updated.Version);
+        Assert.Equal(2, updated.Revision);
         Assert.Equal("Cześć, Ola!", await host.Client.GetStringAsync("/hi/Ola"));
         await Assert.ThrowsAsync<DynamicEndpointConcurrencyException>(() => host.Manager.UpdateAsync(created));
     }

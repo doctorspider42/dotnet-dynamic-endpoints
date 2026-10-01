@@ -26,17 +26,17 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task UpdateAsync(DynamicEndpointDefinition definition, int expectedVersion, CancellationToken cancellationToken)
+    public async Task UpdateAsync(DynamicEndpointDefinition definition, int expectedRevision, CancellationToken cancellationToken)
     {
         var record = await Records.FirstOrDefaultAsync(r => r.Id == definition.Id, cancellationToken)
             ?? throw new DynamicEndpointNotFoundException(definition.Id);
-        if (record.Version != expectedVersion)
+        if (record.Version != expectedRevision)
         {
-            throw new DynamicEndpointConcurrencyException(definition.Id, expectedVersion, record.Version);
+            throw new DynamicEndpointConcurrencyException(definition.Id, expectedRevision, record.Version);
         }
 
-        // Version is a concurrency token – the UPDATE only succeeds if nobody bumped it in the meantime.
-        context.Entry(record).Property(r => r.Version).OriginalValue = expectedVersion;
+        // The revision column is a concurrency token – the UPDATE only succeeds if nobody bumped it in the meantime.
+        context.Entry(record).Property(r => r.Version).OriginalValue = expectedRevision;
         Apply(definition, record);
         try
         {
@@ -44,7 +44,7 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new DynamicEndpointConcurrencyException(definition.Id, expectedVersion, null);
+            throw new DynamicEndpointConcurrencyException(definition.Id, expectedRevision, null);
         }
     }
 
@@ -58,7 +58,7 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         record.Route = definition.Route;
         record.Name = definition.Name;
         record.Enabled = definition.Enabled;
-        record.Version = definition.Version;
+        record.Version = definition.Revision;
         record.CreatedAt = definition.CreatedAt;
         record.UpdatedAt = definition.UpdatedAt;
         record.Definition = JsonSerializer.Serialize(definition, DynamicEndpointsJson.SerializerOptions);
@@ -75,7 +75,7 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         {
             Id = record.Id,
             Enabled = record.Enabled,
-            Version = record.Version,
+            Revision = record.Version,
             CreatedAt = record.CreatedAt,
             UpdatedAt = record.UpdatedAt,
         };

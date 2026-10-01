@@ -59,6 +59,14 @@ public sealed class SampleEndpointsSeeder(IDynamicEndpointManager manager, ILogg
                 .HandledBy<CollectionProcessor, CollectionConfig>(new() { Collection = "notes", Action = CollectionAction.Get })
                 .FromRoute("id", p => p.Guid()),
 
+            DynamicEndpoint.Post("/documents")
+                .Named("Upload document")
+                .WithDescription("A multipart/form-data upload. The echo shows the file metadata the processor gets; request.GetFile(\"file\") gives the content.")
+                .InGroup("Demo")
+                .HandledBy<EchoProcessor>()
+                .FromForm("title", p => p.String().Required().Length(3, 100))
+                .FromForm("file", p => p.File(maxSize: 5 * 1024 * 1024, "application/pdf", "image/*").Required()),
+
             DynamicEndpoint.Delete("/notes/{id}")
                 .Named("Delete note")
                 .InGroup("Notes")

@@ -91,7 +91,7 @@ internal static class ParameterSchemas
         return schema;
     }
 
-    private static void ApplyScalar(JsonObject schema, ParameterType type, ParameterDefinition p, bool includePattern)
+    private static void ApplyScalar(JsonObject schema, ParameterType type, ParameterDefinition p, bool forDocumentation)
     {
         switch (type)
         {
@@ -112,7 +112,7 @@ internal static class ParameterSchemas
                     schema["format"] = Validation.Engine.StringFormats.ToSchemaName(format);
                 }
 
-                if (includePattern && p.Pattern is { } pattern)
+                if (forDocumentation && p.Pattern is { } pattern)
                 {
                     schema["pattern"] = pattern;
                 }
@@ -152,6 +152,23 @@ internal static class ParameterSchemas
                 return;
             case ParameterType.Array:
                 schema["type"] = "array";
+                return;
+            case ParameterType.File:
+                // Bound as { fileName, contentType, length } – documented as what clients send: binary content.
+                if (forDocumentation)
+                {
+                    schema["type"] = "string";
+                    schema["format"] = "binary";
+                    if (p.AllowedContentTypes is [var single])
+                    {
+                        schema["contentMediaType"] = single;
+                    }
+                }
+                else
+                {
+                    schema["type"] = "object";
+                }
+
                 return;
         }
 

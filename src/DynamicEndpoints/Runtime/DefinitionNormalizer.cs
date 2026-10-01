@@ -33,6 +33,9 @@ internal static class DefinitionNormalizer
                 Description = Clean(p.Description),
                 Pattern = string.IsNullOrEmpty(p.Pattern) ? null : p.Pattern,
                 AllowedValues = p.AllowedValues is { Count: > 0 } ? p.AllowedValues : null,
+                AllowedContentTypes = p.AllowedContentTypes?.Select(c => (c ?? string.Empty).Trim()).Where(c => c.Length > 0).ToList() is { Count: > 0 } types
+                    ? types
+                    : null,
                 Validators = p.Validators is { Count: > 0 } ? NormalizeValidators(p.Validators) : null,
             }).ToList(),
             Validators = NormalizeValidators(d.Validators),
@@ -40,6 +43,7 @@ internal static class DefinitionNormalizer
             {
                 Name = Clean(r.Name),
                 Message = (r.Message ?? string.Empty).Trim(),
+                Code = Clean(r.Code),
                 Parameter = Clean(r.Parameter),
             }).ToList(),
         };

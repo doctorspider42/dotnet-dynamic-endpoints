@@ -8,6 +8,8 @@ namespace DynamicEndpoints.Runtime;
 /// <summary>Everything needed to serve a definition, prepared once when the definition is saved or loaded.</summary>
 internal sealed class CompiledEndpoint
 {
+    private DynamicEndpointMetadata? _metadata;
+
     public required DynamicEndpointDefinition Definition { get; init; }
 
     public required string ProcessorName { get; init; }
@@ -32,6 +34,11 @@ internal sealed class CompiledEndpoint
     public required JsonObject Configuration { get; init; }
 
     public bool HasBody => Parameters.Any(p => p.Definition.Source == ParameterSource.Body);
+
+    public bool HasForm => Parameters.Any(p => p.Definition.Source == ParameterSource.Form);
+
+    /// <summary>Public view of this endpoint, attached to the routed endpoint and handed to filters.</summary>
+    public DynamicEndpointMetadata Metadata => _metadata ??= new DynamicEndpointMetadata(Definition, ProcessorName);
 
     public ConcurrentDictionary<Type, object?> ConfigurationCache { get; } = new();
 }

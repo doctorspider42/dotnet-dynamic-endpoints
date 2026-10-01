@@ -16,6 +16,9 @@ public sealed record ValidationRuleDefinition
     /// <summary>Error message returned when the rule fails.</summary>
     public string Message { get; init; } = "";
 
+    /// <summary>Machine readable error code reported with the message. Default <c>rule</c>.</summary>
+    public string? Code { get; init; }
+
     /// <summary>Parameter the error is reported for. When empty, the error is reported under <c>request</c>.</summary>
     public string? Parameter { get; init; }
 }

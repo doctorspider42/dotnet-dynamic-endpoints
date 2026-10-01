@@ -14,9 +14,9 @@ public interface IDynamicEndpointStore
 
     /// <summary>
     /// Replaces the stored definition. Must throw <see cref="DynamicEndpointConcurrencyException"/> when the stored
-    /// version differs from <paramref name="expectedVersion"/> and <see cref="DynamicEndpointNotFoundException"/> when it does not exist.
+    /// revision differs from <paramref name="expectedRevision"/> and <see cref="DynamicEndpointNotFoundException"/> when it does not exist.
     /// </summary>
-    Task UpdateAsync(DynamicEndpointDefinition definition, int expectedVersion, CancellationToken cancellationToken);
+    Task UpdateAsync(DynamicEndpointDefinition definition, int expectedRevision, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

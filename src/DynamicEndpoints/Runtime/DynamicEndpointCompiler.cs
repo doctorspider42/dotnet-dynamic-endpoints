@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 
 namespace DynamicEndpoints.Runtime;
 
@@ -92,6 +93,11 @@ internal sealed partial class DynamicEndpointCompiler(
             errors.Add("route", $"Routes under '{prefix}' are reserved by the application.");
         }
 
+        if (!routes.HasRequiredPrefix(route))
+        {
+            errors.Add("route", $"Routes must start with {string.Join(" or ", options.Value.RequiredRoutePrefixes.Select(p => $"'{p}'"))}.");
+        }
+
         try
         {
             return RoutePatternFactory.Parse(route);
@@ -172,6 +178,11 @@ internal sealed partial class DynamicEndpointCompiler(
             compiled.Add(new CompiledParameter(p, regex));
         }
 
+        if (d.Parameters.Any(p => p.Source == ParameterSource.Body) && d.Parameters.Any(p => p.Source == ParameterSource.Form))
+        {
+            errors.Add("parameters", "An endpoint reads either a JSON body ('Body' parameters) or a form ('Form' parameters), not both.");
+        }
+
         if (pattern is not null)
         {
             foreach (var routeParameter in pattern.Parameters)
@@ -193,6 +204,9 @@ internal sealed partial class DynamicEndpointCompiler(
         {
             case ParameterSource.Body when !bodyAllowed:
                 errors.Add($"{key}.source", "Body parameters are only allowed for POST, PUT and PATCH endpoints.");
+                break;
+            case ParameterSource.Form when !bodyAllowed:
+                errors.Add($"{key}.source", "Form parameters are only allowed for POST, PUT and PATCH endpoints.");
                 break;
             case ParameterSource.Route when p.Type is ParameterType.Array or ParameterType.Object:
                 errors.Add($"{key}.type", "Route parameters must be scalar values.");
@@ -217,6 +231,12 @@ internal sealed partial class DynamicEndpointCompiler(
             errors.Add($"{key}.itemType", "Item type can only be set for Array parameters.");
         }
 
+        var isFile = DynamicEndpointMetadata.IsFile(p);
+        if (isFile && p.Source != ParameterSource.Form)
+        {
+            errors.Add($"{key}.type", "Files can only be read from 'Form' parameters (multipart/form-data).");
+        }
+
         if (p.Schema is not null)
         {
             if (p.Type is not (ParameterType.Object or ParameterType.Array))
@@ -233,6 +253,38 @@ internal sealed partial class DynamicEndpointCompiler(
 
     private static void ValidateConstraints(ParameterDefinition p, string key, ValidationErrors errors)
     {
+        if (DynamicEndpointMetadata.IsFile(p))
+        {
+            if (p.MinLength is not null || p.MaxLength is not null || p.Minimum is not null || p.Maximum is not null ||
+                p.Pattern is not null || p.Format is not null || p.AllowedValues is not null || p.Schema is not null)
+            {
+                errors.Add($"{key}.type", "Files support only 'maxFileSize', 'allowedContentTypes' and (for arrays) item counts.");
+            }
+
+            if (p.Default is not null)
+            {
+                errors.Add($"{key}.default", "Files cannot have a default value.");
+            }
+
+            if (p.MaxFileSize <= 0)
+            {
+                errors.Add($"{key}.maxFileSize", "Maximum file size must be positive.");
+            }
+
+            foreach (var contentType in p.AllowedContentTypes ?? [])
+            {
+                if (!MediaTypeHeaderValue.TryParse(contentType, out var parsed) || parsed.MediaType.Value is not { } media ||
+                    media.Length == 0 || media.Contains(';') || (media.StartsWith('*') && media != "*/*"))
+                {
+                    errors.Add($"{key}.allowedContentTypes", $"'{contentType}' is not a content type such as 'application/pdf' or 'image/*'.");
+                }
+            }
+        }
+        else if (p.MaxFileSize is not null || p.AllowedContentTypes is not null)
+        {
+            errors.Add($"{key}.maxFileSize", "'maxFileSize' and 'allowedContentTypes' can only be set for File parameters.");
+        }
+
         if (p.MinLength < 0 || p.MaxLength < 0)
         {
             errors.Add($"{key}.minLength", "Lengths cannot be negative.");

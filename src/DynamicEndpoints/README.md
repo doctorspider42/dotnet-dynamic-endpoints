@@ -13,10 +13,13 @@ validated on save, persisted, and documented as OpenAPI 3.1.
 ## Features
 
 - 🔥 **Hot endpoints:** add, change, disable and delete at runtime. The routing table swaps atomically.
-- 🧩 **Declarative binding:** route, query, header and JSON body parameters with types, defaults and request names.
+- 🧩 **Declarative binding:** route, query, header, JSON body and form parameters with types, defaults and request names.
+- 📎 **File uploads:** `multipart/form-data` with size and content-type limits, documented as binary in OpenAPI.
 - 🛡️ **Validation:** JSON Schema constraints, built-in formats (e-mail, URI, phone, IP, time), JsonLogic business rules and custom validators.
+- 🪝 **Filters:** access checks before validation, your own error format, logging and metering of rejected requests.
+- 🌍 **Localized errors:** English and Polish built in, overridable texts, stable error codes.
 - ⚙️ **Processors:** validated input goes to your own, statically typed code with full DI.
-- 📜 **OpenAPI 3.1:** generated from the definitions, ready for Swagger UI.
+- 📜 **OpenAPI 3.1:** generated from the definitions, ready for Swagger UI, with security schemes, common headers and hooks.
 - 🔐 **First-class endpoints:** authorization policies, rate limiting and conventions work as usual.
 - 🚦 **Safe by design:** no code execution, ReDoS-proof regexes, size limits, conflict detection.
 - 🪶 **Zero third-party dependencies.**

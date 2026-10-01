@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace DynamicEndpoints;
 
@@ -65,8 +67,33 @@ public sealed record DynamicEndpointDefinition
     /// <summary>Disabled endpoints are persisted but not routable.</summary>
     public bool Enabled { get; init; } = true;
 
-    /// <summary>Optimistic concurrency version, managed by the library.</summary>
-    public int Version { get; init; }
+    /// <summary>
+    /// Revision of the definition – an optimistic concurrency token managed by the library (1 on create, +1 on every change).
+    /// Updates must send the revision they are based on. Not related to API versioning.
+    /// </summary>
+    public int Revision { get; init; }
+
+    /// <summary>Former name of <see cref="Revision"/>.</summary>
+    [Obsolete("Renamed to Revision – it is an optimistic concurrency token, not an API version.")]
+    [JsonIgnore]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int Version { get => Revision; init => Revision = value; }
+
+    // Definitions saved or sent by 0.1.x use "version" – still accepted when reading JSON, never written.
+    [JsonInclude]
+    [JsonPropertyName("version")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    private int? LegacyVersion
+    {
+        get => null;
+        init
+        {
+            if (value is { } revision && Revision == 0)
+            {
+                Revision = revision;
+            }
+        }
+    }
 
     public DateTimeOffset CreatedAt { get; init; }
 

@@ -36,7 +36,7 @@ public sealed class InMemoryDynamicEndpointStore : IDynamicEndpointStore
         return Task.CompletedTask;
     }
 
-    public Task UpdateAsync(DynamicEndpointDefinition definition, int expectedVersion, CancellationToken cancellationToken)
+    public Task UpdateAsync(DynamicEndpointDefinition definition, int expectedRevision, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
@@ -45,9 +45,9 @@ public sealed class InMemoryDynamicEndpointStore : IDynamicEndpointStore
                 throw new DynamicEndpointNotFoundException(definition.Id);
             }
 
-            if (current.Version != expectedVersion)
+            if (current.Revision != expectedRevision)
             {
-                throw new DynamicEndpointConcurrencyException(definition.Id, expectedVersion, current.Version);
+                throw new DynamicEndpointConcurrencyException(definition.Id, expectedRevision, current.Revision);
             }
 
             _definitions[definition.Id] = DynamicEndpointsJson.DeepClone(definition);

@@ -1,11 +1,10 @@
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace DynamicEndpoints.Runtime;
 
-/// <summary>The request delegate shared by every dynamic endpoint: bind → validate → process.</summary>
+/// <summary>The request delegate shared by every dynamic endpoint: filters → bind → validate → process.</summary>
 internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<DynamicRequestHandler> logger)
 {
     public async Task HandleAsync(HttpContext context, CompiledEndpoint endpoint)
@@ -14,20 +13,35 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         using var scope = logger.BeginScope(new Dictionary<string, object?>
         {
             ["DynamicEndpointId"] = definition.Id,
-            ["DynamicEndpointVersion"] = definition.Version,
+            ["DynamicEndpointRevision"] = definition.Revision,
         });
 
-        var binding = await binder.BindAsync(context, endpoint);
-        if (binding.Failure is not null)
+        var filters = context.RequestServices.GetServices<IDynamicEndpointFilter>().ToArray();
+        if (filters.Length > 0)
         {
-            await binding.Failure.ExecuteAsync(context);
+            var requestContext = new DynamicEndpointRequestContext(context, endpoint.Metadata);
+            foreach (var filter in filters)
+            {
+                await filter.OnRequestAsync(requestContext);
+                if (requestContext.Result is { } shortCircuit)
+                {
+                    await shortCircuit.ExecuteAsync(context);
+                    return;
+                }
+            }
+        }
+
+        var binding = await binder.BindAsync(context, endpoint);
+        if (binding.Rejection is { } rejection)
+        {
+            await RejectAsync(context, endpoint, filters, binding, rejection);
             return;
         }
 
         // Cheap checks first, all reported together; expensive request-level validators only for otherwise valid input.
         var errors = binding.Errors;
         RequestValidator.ValidateStructure(endpoint, binding.Values, errors);
-        await RunParameterValidatorsAsync(context, endpoint, binding.Values, errors);
+        await RunParameterValidatorsAsync(context, endpoint, binding, errors);
         if (!errors.HasErrors)
         {
             RequestValidator.ValidateRules(endpoint, binding.Values, errors);
@@ -37,28 +51,57 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         {
             foreach (var validator in endpoint.Validators)
             {
-                await RunAsync(context, endpoint, validator, null, binding.Values, errors);
+                await RunAsync(context, endpoint, validator, null, binding, errors);
             }
         }
 
         if (errors.HasErrors)
         {
             logger.LogDebug("Request to dynamic endpoint {Method} {Route} failed validation.", definition.Method, definition.Route);
-            await Results.ValidationProblem(errors.ToDictionary()).ExecuteAsync(context);
+            var title = errors.Format(ErrorMessage.Of("title.validation", string.Empty));
+            await RejectAsync(context, endpoint, filters, binding,
+                new RequestRejection(DynamicRequestRejection.Validation, StatusCodes.Status400BadRequest, title));
             return;
         }
 
         var processor = context.RequestServices.GetRequiredKeyedService<IDynamicEndpointProcessor>(endpoint.ProcessorName);
-        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, context));
+        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context));
         await (result ?? Results.Empty).ExecuteAsync(context);
     }
 
-    private static async Task RunParameterValidatorsAsync(HttpContext context, CompiledEndpoint endpoint, JsonObject values, ValidationErrors errors)
+    private static async Task RejectAsync(
+        HttpContext context,
+        CompiledEndpoint endpoint,
+        IDynamicEndpointFilter[] filters,
+        BindingResult binding,
+        RequestRejection rejection)
+    {
+        var result = rejection.StatusCode == StatusCodes.Status400BadRequest
+            ? Results.ValidationProblem(binding.Errors.ToDictionary(), title: rejection.Title)
+            : Results.Problem(statusCode: rejection.StatusCode, title: rejection.Title, detail: rejection.Detail);
+
+        if (filters.Length > 0)
+        {
+            var failed = new DynamicValidationFailedContext(
+                context, endpoint.Metadata, rejection.Reason, rejection.StatusCode, rejection.Title, rejection.Detail,
+                binding.Errors.ToList(), binding.Values, result);
+            foreach (var filter in filters)
+            {
+                await filter.OnValidationFailedAsync(failed);
+            }
+
+            result = failed.Result ?? result;
+        }
+
+        await result.ExecuteAsync(context);
+    }
+
+    private static async Task RunParameterValidatorsAsync(HttpContext context, CompiledEndpoint endpoint, BindingResult binding, ValidationErrors errors)
     {
         foreach (var parameter in endpoint.Parameters)
         {
             var definition = parameter.Definition;
-            if (parameter.Validators.Count == 0 || !values.ContainsKey(definition.Name))
+            if (parameter.Validators.Count == 0 || !binding.Values.ContainsKey(definition.Name))
             {
                 continue;
             }
@@ -71,7 +114,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
                     break;
                 }
 
-                await RunAsync(context, endpoint, validator, definition, values, errors);
+                await RunAsync(context, endpoint, validator, definition, binding, errors);
             }
         }
     }
@@ -81,10 +124,10 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         CompiledEndpoint endpoint,
         CompiledValidator validator,
         ParameterDefinition? parameter,
-        JsonObject values,
+        BindingResult binding,
         ValidationErrors errors)
     {
         var instance = context.RequestServices.GetRequiredKeyedService<IDynamicValidator>(validator.Name);
-        return instance.ValidateAsync(new DynamicValidationContext(endpoint, validator, parameter, values, context, errors));
+        return instance.ValidateAsync(new DynamicValidationContext(endpoint, validator, parameter, binding.Values, binding.Files, context, errors));
     }
 }

@@ -119,7 +119,7 @@ internal sealed class DynamicEndpointRuntime(
         };
 
         builder.Metadata.Add(new HttpMethodMetadata([d.Method]));
-        builder.Metadata.Add(new DynamicEndpointMetadata(d.Id, d.Version, d.Name));
+        builder.Metadata.Add(compiled.Metadata);
 
         if (d.AllowAnonymous)
         {

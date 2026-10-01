@@ -120,8 +120,8 @@
 <script>
 const API = '/api/admin/endpoints';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const SOURCES = ['Route', 'Query', 'Header', 'Body'];
-const TYPES = ['String', 'Integer', 'Number', 'Boolean', 'Date', 'DateTime', 'Guid', 'Array', 'Object'];
+const SOURCES = ['Route', 'Query', 'Header', 'Body', 'Form'];
+const TYPES = ['String', 'Integer', 'Number', 'Boolean', 'Date', 'DateTime', 'Guid', 'Array', 'Object', 'File'];
 const SCALARS = ['String', 'Integer', 'Number', 'Boolean', 'Date', 'DateTime', 'Guid'];
 const FORMATS = ['', 'Email', 'Uri', 'Phone', 'Ipv4', 'Ipv6', 'Time'];
 
@@ -178,7 +178,7 @@ function renderList() {
         <td class="hide-sm">${esc(d.group) || '<span class="muted">—</span>'}</td>
         <td class="hide-sm"><span class="badge">${esc(d.processor || 'default')}</span></td>
         <td><span class="status s-${status}" title="${esc((errors || []).join('\n'))}">${status}</span></td>
-        <td class="hide-sm muted">v${d.version}</td>
+        <td class="hide-sm muted">r${d.revision}</td>
         <td class="actions">
           <button class="small" onclick="openTester('${d.id}')" ${status !== 'Active' ? 'disabled' : ''}>▶ Try</button>
           <button class="small" onclick="openEditor('${d.id}')">Edit</button>
@@ -233,7 +233,7 @@ function openEditor(id) {
   openDrawer(existing ? `Edit ${existing.method} ${existing.route}` : 'New endpoint');
   renderEditor();
   $('#drawer-foot').innerHTML = `
-    <span class="muted" style="margin-right:auto;align-self:center">${existing ? `version ${existing.version}` : 'Saving publishes the endpoint immediately'}</span>
+    <span class="muted" style="margin-right:auto;align-self:center">${existing ? `revision ${existing.revision}` : 'Saving publishes the endpoint immediately'}</span>
     <button onclick="closeDrawer()">Cancel</button>
     <button onclick="validateDraft()">Validate</button>
     <button class="primary" onclick="saveDraft()">${existing ? 'Save & publish' : 'Create & publish'}</button>`;
@@ -362,7 +362,7 @@ function renderParameter(p, i) {
         ${field('Name', input(`${base}.name`, p.name, 'class="mono"'))}
         ${field('Source', select(`${base}.source`, p.source, SOURCES, 'data-rerender="1"'))}
         ${field('Type', select(`${base}.type`, t, TYPES, 'data-rerender="1"'))}
-        ${t === 'Array' ? field('Item type', select(`${base}.itemType`, it, SCALARS.concat(p.source === 'Body' ? ['Object'] : []), 'data-rerender="1"')) : ''}
+        ${t === 'Array' ? field('Item type', select(`${base}.itemType`, it, SCALARS.concat(p.source === 'Body' ? ['Object'] : p.source === 'Form' ? ['File'] : []), 'data-rerender="1"')) : ''}
         ${p.source !== 'Route' ? field(p.source === 'Header' ? 'Header name' : 'Name in request', input(`${base}.sourceName`, p.sourceName, `placeholder="${esc(p.name || '')}"`)) : ''}
         <label class="check"><input type="checkbox" data-path="${base}.required" data-rerender="1" ${p.required || p.source === 'Route' ? 'checked' : ''} ${p.source === 'Route' ? 'disabled' : ''}> Required</label>
         ${field('Description', input(`${base}.description`, p.description), 'wide')}
@@ -373,9 +373,11 @@ function renderParameter(p, i) {
         ${showText ? field('Format', select(`${base}.format`, p.format ?? '', FORMATS)) : ''}
         ${showText ? field('Pattern (regex)', input(`${base}.pattern`, p.pattern, 'class="mono" placeholder="^[a-z]+$"'), 'half') : ''}
         ${showEnum ? field('Allowed values (comma separated)', input(`${base}.allowedValues`, (p.allowedValues || []).join(', '), 'data-list="1"'), 'half') : ''}
+        ${t === 'File' || it === 'File' ? field('Max file size (bytes)', input(`${base}.maxFileSize`, p.maxFileSize, 'type="number" min="1" data-number="int"')) : ''}
+        ${t === 'File' || it === 'File' ? field('Allowed content types (comma separated)', input(`${base}.allowedContentTypes`, (p.allowedContentTypes || []).join(', '), 'data-list="1" placeholder="application/pdf, image/*"'), 'half') : ''}
         ${t === 'Array' ? field('Min items', input(`${base}.minItems`, p.minItems, 'type="number" min="0" data-number="int"')) : ''}
         ${t === 'Array' ? field('Max items', input(`${base}.maxItems`, p.maxItems, 'type="number" min="0" data-number="int"')) : ''}
-        ${!p.required && p.source !== 'Route' ? field('Default (JSON)', input(`${base}.default`, json(p.default), 'class="mono" data-json="1" placeholder="e.g. 10 or &quot;abc&quot;"')) : ''}
+        ${!p.required && p.source !== 'Route' && t !== 'File' && it !== 'File' ? field('Default (JSON)', input(`${base}.default`, json(p.default), 'class="mono" data-json="1" placeholder="e.g. 10 or &quot;abc&quot;"')) : ''}
         ${field('Example (JSON)', input(`${base}.example`, json(p.example), 'class="mono" data-json="1"'))}
         ${t === 'Object' || t === 'Array' ? field('Custom JSON Schema (optional)', textarea(`${base}.schema`, json(p.schema), 'rows="3"'), 'wide') : ''}
         ${parameterValidators.length ? `<div class="wide"><span class="muted" style="font-size:12px">Custom validators</span><div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px">
@@ -541,8 +543,10 @@ function openTester(id) {
       ${d.description ? `<p class="muted">${esc(d.description)}</p>` : ''}
       ${nonBody.length ? `<div class="grid">${nonBody.map(p => field(
         `${esc(p.sourceName || p.name)} <span class="muted">(${p.source.toLowerCase()}, ${p.type}${p.required || p.source === 'Route' ? ', required' : ''})</span>`,
-        `<input data-test="${esc(p.sourceName || p.name)}" data-source="${p.source}" value="${esc(sampleText(p))}" class="mono">`)).join('')}</div>` : ''}
-      ${d.method === 'GET' || d.method === 'DELETE' ? '' : field('Body (JSON)', `<textarea id="test-body" rows="8" spellcheck="false">${esc(json(body))}</textarea>`)}
+        isFile(p)
+          ? `<input type="file" data-test="${esc(p.sourceName || p.name)}" data-source="${p.source}" ${p.type === 'Array' ? 'multiple' : ''}>`
+          : `<input data-test="${esc(p.sourceName || p.name)}" data-source="${p.source}" value="${esc(sampleText(p))}" class="mono">`)).join('')}</div>` : ''}
+      ${d.method === 'GET' || d.method === 'DELETE' || d.parameters.some(p => p.source === 'Form') ? '' : field('Body (JSON)', `<textarea id="test-body" rows="8" spellcheck="false">${esc(json(body))}</textarea>`)}
       <p class="hint">Array query parameters: separate values with commas. Clear a field to omit it.</p>
     </section>
     <section class="card"><h3>Response <span id="test-status"></span></h3><pre class="response" id="test-response">Click “Send”.</pre></section>`;
@@ -557,6 +561,7 @@ function sample(p) {
   return { String: 'text', Integer: p.minimum ?? 1, Number: p.minimum ?? 1.5, Boolean: true, Date: new Date().toISOString().slice(0, 10),
     DateTime: new Date().toISOString(), Guid: crypto.randomUUID(), Array: [], Object: {} }[p.type] ?? null;
 }
+function isFile(p) { return p.type === 'File' || (p.type === 'Array' && p.itemType === 'File'); }
 function sampleText(p) { const v = sample(p); return Array.isArray(v) ? v.join(',') : (v ?? ''); }
 
 async function sendTest(id) {
@@ -564,9 +569,12 @@ async function sendTest(id) {
   let path = d.route;
   const query = new URLSearchParams();
   const headers = {};
+  const form = d.parameters.some(p => p.source === 'Form') ? new FormData() : null;
   for (const el of document.querySelectorAll('[data-test]')) {
     const name = el.dataset.test, value = el.value;
+    if (el.type === 'file') { for (const file of el.files) form.append(name, file); continue; }
     if (value === '') continue;
+    if (el.dataset.source === 'Form') { value.split(',').forEach(v => form.append(name, v.trim())); continue; }
     if (el.dataset.source === 'Route') path = path.replace(new RegExp(`\\{\\*{0,2}${name}[^}]*\\}`, 'i'), encodeURIComponent(value));
     else if (el.dataset.source === 'Query') value.split(',').forEach(v => query.append(name, v.trim()));
     else headers[name] = value;
@@ -575,7 +583,8 @@ async function sendTest(id) {
   if (bodyEl && bodyEl.value.trim()) headers['Content-Type'] = 'application/json';
   const url = path + (query.size ? `?${query}` : '');
   const started = performance.now();
-  const response = await fetch(url, { method: d.method, headers, body: bodyEl && bodyEl.value.trim() ? bodyEl.value : undefined });
+  // The browser sets the multipart Content-Type (with its boundary) for FormData bodies.
+  const response = await fetch(url, { method: d.method, headers, body: form ?? (bodyEl && bodyEl.value.trim() ? bodyEl.value : undefined) });
   const ms = Math.round(performance.now() - started);
   const text = await response.text();
   let pretty = text;

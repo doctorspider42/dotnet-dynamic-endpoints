@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 
 namespace DynamicEndpoints;
@@ -11,6 +12,13 @@ public sealed class DynamicEndpointsOptions
     /// </summary>
     public IList<string> ReservedPrefixes { get; } = new List<string>();
 
+    /// <summary>
+    /// When not empty, every route must start with one of these prefixes – checked when a definition is saved.
+    /// Prefixes may contain parameters that match a single literal segment part: <c>/api/v{version:int}</c> accepts
+    /// <c>/api/v1/orders</c> and <c>/api/v2/orders/{id}</c>, but neither <c>/orders</c> nor <c>/api/v{v}/orders</c>.
+    /// </summary>
+    public IList<string> RequiredRoutePrefixes { get; } = new List<string>();
+
     /// <summary>HTTP methods admins can use.</summary>
     public ISet<string> AllowedMethods { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -22,6 +30,12 @@ public sealed class DynamicEndpointsOptions
 
     /// <summary>Maximum accepted JSON body size in bytes. Default 1 MB.</summary>
     public long MaxRequestBodySize { get; set; } = 1024 * 1024;
+
+    /// <summary>
+    /// Maximum accepted size in bytes of form bodies (<c>multipart/form-data</c> with all its files, or
+    /// <c>application/x-www-form-urlencoded</c>). Default 30 MB. The server's own limit (Kestrel: 30 MB) applies as well.
+    /// </summary>
+    public long MaxFormBodySize { get; set; } = 30 * 1024 * 1024;
 
     /// <summary>Maximum nesting depth of JSON bodies. Default 32.</summary>
     public int MaxJsonDepth { get; set; } = 32;
@@ -39,6 +53,9 @@ public sealed class DynamicEndpointsOptions
     /// <summary>Hook to add custom metadata (CORS, output caching, …) to every built endpoint.</summary>
     public Action<EndpointBuilder, DynamicEndpointDefinition>? ConfigureEndpoint { get; set; }
 
+    /// <summary>Texts of request validation errors: language selection, overrides, custom localization.</summary>
+    public DynamicValidationMessages Messages { get; } = new();
+
     public DynamicEndpointsOpenApiOptions OpenApi { get; } = new();
 }
 
@@ -52,4 +69,73 @@ public sealed class DynamicEndpointsOpenApiOptions
 
     /// <summary>Documentation section of endpoints without a <see cref="DynamicEndpointDefinition.Group"/>.</summary>
     public string DefaultGroup { get; set; } = "Dynamic";
+
+    /// <summary>Security schemes added to <c>components.securitySchemes</c>, e.g. via <see cref="AddApiKey"/>.</summary>
+    public IDictionary<string, JsonObject> SecuritySchemes { get; } = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+
+    /// <summary>Document-level security requirements (<c>{ "ApiKey": [] }</c>), applied to every operation.</summary>
+    public IList<JsonObject> SecurityRequirements { get; } = new List<JsonObject>();
+
+    /// <summary>Headers documented on every operation (or the ones selected by <see cref="DynamicOpenApiHeader.AppliesTo"/>).</summary>
+    public IList<DynamicOpenApiHeader> Headers { get; } = new List<DynamicOpenApiHeader>();
+
+    /// <summary>Last chance to change an operation – runs after everything else was generated.</summary>
+    public Action<JsonObject, DynamicEndpointDefinition>? ConfigureOperation { get; set; }
+
+    /// <summary>Last chance to change the whole document (servers, extra schemas, …) – runs after all operations were generated.</summary>
+    public Action<JsonObject>? ConfigureDocument { get; set; }
+
+    /// <summary>Adds a security scheme; with <paramref name="required"/> it is also required by every operation.</summary>
+    public DynamicEndpointsOpenApiOptions AddSecurityScheme(string name, JsonObject scheme, bool required = true)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(scheme);
+        SecuritySchemes[name] = scheme;
+        if (required)
+        {
+            SecurityRequirements.Add(new JsonObject { [name] = new JsonArray() });
+        }
+
+        return this;
+    }
+
+    /// <summary>Documents an API key sent in a header (e.g. <c>X-Api-Key</c>) and requires it for every operation.</summary>
+    public DynamicEndpointsOpenApiOptions AddApiKey(string headerName = "X-Api-Key", string schemeName = "ApiKey", string? description = null)
+    {
+        var scheme = new JsonObject { ["type"] = "apiKey", ["in"] = "header", ["name"] = headerName };
+        if (description is not null)
+        {
+            scheme["description"] = description;
+        }
+
+        return AddSecurityScheme(schemeName, scheme);
+    }
+
+    /// <summary>Documents a header on every operation, or on those matching <paramref name="appliesTo"/>.</summary>
+    public DynamicEndpointsOpenApiOptions AddHeader(
+        string name,
+        string? description = null,
+        bool required = false,
+        Func<DynamicEndpointDefinition, bool>? appliesTo = null,
+        JsonObject? schema = null)
+    {
+        Headers.Add(new DynamicOpenApiHeader(name) { Description = description, Required = required, AppliesTo = appliesTo, Schema = schema });
+        return this;
+    }
+}
+
+/// <summary>A header documented on dynamic endpoint operations (handled by the application, e.g. by middleware).</summary>
+public sealed class DynamicOpenApiHeader(string name)
+{
+    public string Name { get; } = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("A header name is required.", nameof(name)) : name;
+
+    public string? Description { get; init; }
+
+    public bool Required { get; init; }
+
+    /// <summary>JSON Schema of the value. Default <c>{ "type": "string" }</c>.</summary>
+    public JsonObject? Schema { get; init; }
+
+    /// <summary>Operations the header is documented on; all when <c>null</c>.</summary>
+    public Func<DynamicEndpointDefinition, bool>? AppliesTo { get; init; }
 }

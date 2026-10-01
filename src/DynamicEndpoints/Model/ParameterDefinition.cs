@@ -12,6 +12,11 @@ public enum ParameterSource
     Header,
     /// <summary>A top-level property of a JSON object request body.</summary>
     Body,
+    /// <summary>
+    /// A field of a <c>multipart/form-data</c> or <c>application/x-www-form-urlencoded</c> request body –
+    /// the only source of <see cref="ParameterType.File"/> parameters. An endpoint reads either JSON or form bodies, not both.
+    /// </summary>
+    Form,
 }
 
 /// <summary>Well-known formats of <see cref="ParameterType.String"/> parameters.</summary>
@@ -45,6 +50,11 @@ public enum ParameterType
     Array,
     /// <summary>JSON object; only allowed for body parameters. Shape can be described with <see cref="ParameterDefinition.Schema"/>.</summary>
     Object,
+    /// <summary>
+    /// An uploaded file (form parameters only). Read the content with <see cref="DynamicRequest.GetFile"/>; the parameter object
+    /// carries its metadata – <c>{ "fileName": "a.pdf", "contentType": "application/pdf", "length": 1234 }</c> – so rules can use it.
+    /// </summary>
+    File,
 }
 
 /// <summary>
@@ -109,6 +119,15 @@ public sealed record ParameterDefinition
     /// Custom JSON Schema (draft 2020-12) for <see cref="ParameterType.Object"/> and <see cref="ParameterType.Array"/> parameters.
     /// </summary>
     public JsonObject? Schema { get; init; }
+
+    /// <summary>Maximum size in bytes of a <see cref="ParameterType.File"/> parameter (of every file, for arrays of files).</summary>
+    public long? MaxFileSize { get; init; }
+
+    /// <summary>
+    /// Allowed content types of a <see cref="ParameterType.File"/> parameter, e.g. <c>application/pdf</c> or <c>image/*</c>.
+    /// Based on the <c>Content-Type</c> the client sent – check the content itself when that matters.
+    /// </summary>
+    public IReadOnlyList<string>? AllowedContentTypes { get; init; }
 
     /// <summary>Custom validators run for this parameter when it is present and passed the built-in checks.</summary>
     public IReadOnlyList<ValidatorReference>? Validators { get; init; }

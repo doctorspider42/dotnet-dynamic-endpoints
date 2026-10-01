@@ -115,9 +115,10 @@ public sealed class EngineTests
                 "lines": { "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "type": "string", "maxLength": 3 } } } }
             """)!.AsObject();
         var errors = new List<string>();
+        var messages = new DynamicValidationMessages();
 
         JsonSchemaLite.Validate(schema, JsonNode.Parse("""{ "zip": "x", "lines": ["abcd", "a", "a"], "extra": 1 }"""),
-            (path, message) => errors.Add($"{string.Join('/', path)}: {message}"));
+            (path, message) => errors.Add($"{string.Join('/', path)}: {messages.Format(message)}"));
 
         Assert.Contains(errors, e => e.StartsWith("city: This field is required"));
         Assert.Contains(errors, e => e.StartsWith("zip: Must be a UUID"));

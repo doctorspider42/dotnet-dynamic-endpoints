@@ -20,7 +20,7 @@ public interface IDynamicEndpointManager
     Task<DynamicEndpointDefinition> CreateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Replaces a definition. <see cref="DynamicEndpointDefinition.Version"/> must match the stored version
+    /// Replaces a definition. <see cref="DynamicEndpointDefinition.Revision"/> must match the stored revision
     /// (optimistic concurrency), the returned definition carries the new one.
     /// </summary>
     /// <exception cref="DynamicEndpointValidationException" />

@@ -11,6 +11,7 @@ public sealed class DynamicValidationContext
     private readonly CompiledEndpoint _endpoint;
     private readonly CompiledValidator _validator;
     private readonly ValidationErrors _errors;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> _files;
     private JsonObject? _configuration;
 
     internal DynamicValidationContext(
@@ -18,12 +19,14 @@ public sealed class DynamicValidationContext
         CompiledValidator validator,
         ParameterDefinition? parameter,
         JsonObject parameters,
+        IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> files,
         HttpContext httpContext,
         ValidationErrors errors)
     {
         _endpoint = endpoint;
         _validator = validator;
         _errors = errors;
+        _files = files;
         Parameter = parameter;
         Parameters = parameters;
         HttpContext = httpContext;
@@ -57,6 +60,13 @@ public sealed class DynamicValidationContext
     public T? Get<T>(string name) =>
         Parameters[name] is { } node ? node.Deserialize<T>(DynamicEndpointsJson.SerializerOptions) : default;
 
+    /// <summary>The uploaded file of a <see cref="ParameterType.File"/> parameter (default: the validated one).</summary>
+    public IFormFile? GetFile(string? name = null) => GetFiles(name) is [var first, ..] ? first : null;
+
+    /// <summary>All uploaded files of a file parameter (default: the validated one).</summary>
+    public IReadOnlyList<IFormFile> GetFiles(string? name = null) =>
+        (name ?? Parameter?.Name) is { } key && _files.TryGetValue(key, out var files) ? files : [];
+
     /// <summary>Configuration deserialized to <typeparamref name="T"/>, cached per endpoint version – treat as read-only.</summary>
     public T? GetConfiguration<T>() =>
         (T?)_validator.ConfigurationCache.GetOrAdd(
@@ -68,14 +78,14 @@ public sealed class DynamicValidationContext
     public void AddError(string message) => AddError(null, message);
 
     /// <summary>
-    /// Reports an error for a parameter path such as <c>checkOut</c>, <c>address.city</c> or <c>items[2].sku</c>.
-    /// The first segment is matched against parameter names (case-insensitive) and reported under the name used in the request.
+    /// Reports an error with a machine readable <paramref name="code"/> (default <see cref="DynamicValidationCodes.Custom"/>),
+    /// exposed through <see cref="DynamicValidationFailedContext.Errors"/>. See <see cref="AddError(string?, string)"/> for paths.
     /// </summary>
-    public void AddError(string? path, string message)
+    public void AddError(string? path, string message, string code)
     {
         if (string.IsNullOrEmpty(path))
         {
-            _errors.Add(Parameter?.EffectiveSourceName ?? "request", message);
+            _errors.Add(Parameter?.EffectiveSourceName ?? "request", message, code);
             return;
         }
 
@@ -83,6 +93,12 @@ public sealed class DynamicValidationContext
         var head = end < 0 ? path : path[..end];
         var parameter = _endpoint.Parameters
             .FirstOrDefault(p => string.Equals(p.Definition.Name, head, StringComparison.OrdinalIgnoreCase))?.Definition;
-        _errors.Add(parameter is null ? path : parameter.EffectiveSourceName + (end < 0 ? string.Empty : path[end..]), message);
+        _errors.Add(parameter is null ? path : parameter.EffectiveSourceName + (end < 0 ? string.Empty : path[end..]), message, code);
     }
+
+    /// <summary>
+    /// Reports an error for a parameter path such as <c>checkOut</c>, <c>address.city</c> or <c>items[2].sku</c>.
+    /// The first segment is matched against parameter names (case-insensitive) and reported under the name used in the request.
+    /// </summary>
+    public void AddError(string? path, string message) => AddError(path, message, DynamicValidationCodes.Custom);
 }

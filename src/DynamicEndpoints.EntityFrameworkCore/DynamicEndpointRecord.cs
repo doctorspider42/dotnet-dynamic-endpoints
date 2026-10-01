@@ -18,6 +18,10 @@ public sealed class DynamicEndpointRecord
 
     public bool Enabled { get; set; }
 
+    /// <summary>
+    /// <see cref="DynamicEndpointDefinition.Revision"/> – the concurrency token. The column keeps its original name,
+    /// so existing databases need no migration.
+    /// </summary>
     public int Version { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

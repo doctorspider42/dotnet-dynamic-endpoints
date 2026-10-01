@@ -35,14 +35,14 @@ internal static class JsonSchemaLite
     }
 
     /// <summary>Reports each violation with the JSON path segments of the offending value.</summary>
-    public static void Validate(JsonObject schema, JsonNode? instance, Action<IReadOnlyList<string>, string> report) =>
+    public static void Validate(JsonObject schema, JsonNode? instance, Action<IReadOnlyList<string>, ErrorMessage> report) =>
         Validate(schema, instance, [], report);
 
-    private static void Validate(JsonNode schemaNode, JsonNode? instance, List<string> path, Action<IReadOnlyList<string>, string> report)
+    private static void Validate(JsonNode schemaNode, JsonNode? instance, List<string> path, Action<IReadOnlyList<string>, ErrorMessage> report)
     {
         if (schemaNode is JsonValue boolean && boolean.GetValueKind() is JsonValueKind.False)
         {
-            report(path, "This value is not allowed.");
+            report(path, ErrorMessage.Of("notAllowed", DynamicValidationCodes.NotAllowed));
             return;
         }
 
@@ -53,18 +53,18 @@ internal static class JsonSchemaLite
 
         if (schema["type"] is { } type && !MatchesType(type, instance))
         {
-            report(path, $"Expected {DescribeType(type)}, got {JsonValues.KindName(instance)}.");
+            report(path, ErrorMessage.Of("type", DynamicValidationCodes.Type, DescribeType(type), JsonValues.KindName(instance)));
             return; // other keywords make no sense for a value of the wrong type
         }
 
         if (schema["const"] is { } constant && !JsonValues.DeepEquals(constant, instance))
         {
-            report(path, $"Must be {constant.ToJsonString()}.");
+            report(path, ErrorMessage.Of("const", DynamicValidationCodes.Const, constant.ToJsonString()));
         }
 
         if (schema["enum"] is JsonArray allowed && !allowed.Any(v => JsonValues.DeepEquals(v, instance)))
         {
-            report(path, $"Must be one of: {string.Join(", ", allowed.Select(v => v?.ToJsonString() ?? "null"))}.");
+            report(path, ErrorMessage.Of("enum", DynamicValidationCodes.Enum, string.Join(", ", allowed.Select(v => v?.ToJsonString() ?? "null"))));
         }
 
         switch (JsonValues.KindOf(instance))
@@ -84,17 +84,17 @@ internal static class JsonSchemaLite
         }
     }
 
-    private static void ValidateString(JsonObject schema, string value, List<string> path, Action<IReadOnlyList<string>, string> report)
+    private static void ValidateString(JsonObject schema, string value, List<string> path, Action<IReadOnlyList<string>, ErrorMessage> report)
     {
         var length = value.EnumerateRunes().Count(); // JSON Schema counts code points, not UTF-16 units
         if (Int(schema, "minLength") is { } min && length < min)
         {
-            report(path, $"Must be at least {min} character{Plural(min)} long.");
+            report(path, ErrorMessage.Counted("minLength", DynamicValidationCodes.MinLength, min, min));
         }
 
         if (Int(schema, "maxLength") is { } max && length > max)
         {
-            report(path, $"Must be at most {max} character{Plural(max)} long.");
+            report(path, ErrorMessage.Counted("maxLength", DynamicValidationCodes.MaxLength, max, max));
         }
 
         if (schema["format"] is JsonValue format && format.TryGetValue<string>(out var name) && StringFormats.Check(name, value) is { } error)
@@ -103,7 +103,7 @@ internal static class JsonSchemaLite
         }
     }
 
-    private static void ValidateNumber(JsonObject schema, JsonNode? instance, List<string> path, Action<IReadOnlyList<string>, string> report)
+    private static void ValidateNumber(JsonObject schema, JsonNode? instance, List<string> path, Action<IReadOnlyList<string>, ErrorMessage> report)
     {
         if (!JsonValues.TryGetNumber(instance, out var value))
         {
@@ -112,31 +112,31 @@ internal static class JsonSchemaLite
 
         if (Number(schema, "minimum") is { } min && value < min)
         {
-            report(path, $"Must be at least {JsonValues.FormatNumber(min)}.");
+            report(path, ErrorMessage.Of("minimum", DynamicValidationCodes.Minimum, JsonValues.FormatNumber(min)));
         }
 
         if (Number(schema, "maximum") is { } max && value > max)
         {
-            report(path, $"Must be at most {JsonValues.FormatNumber(max)}.");
+            report(path, ErrorMessage.Of("maximum", DynamicValidationCodes.Maximum, JsonValues.FormatNumber(max)));
         }
 
         if (Number(schema, "exclusiveMinimum") is { } exMin && value <= exMin)
         {
-            report(path, $"Must be greater than {JsonValues.FormatNumber(exMin)}.");
+            report(path, ErrorMessage.Of("exclusiveMinimum", DynamicValidationCodes.ExclusiveMinimum, JsonValues.FormatNumber(exMin)));
         }
 
         if (Number(schema, "exclusiveMaximum") is { } exMax && value >= exMax)
         {
-            report(path, $"Must be less than {JsonValues.FormatNumber(exMax)}.");
+            report(path, ErrorMessage.Of("exclusiveMaximum", DynamicValidationCodes.ExclusiveMaximum, JsonValues.FormatNumber(exMax)));
         }
 
         if (Number(schema, "multipleOf") is { } step && step > 0 && value % step != 0)
         {
-            report(path, $"Must be a multiple of {JsonValues.FormatNumber(step)}.");
+            report(path, ErrorMessage.Of("multipleOf", DynamicValidationCodes.MultipleOf, JsonValues.FormatNumber(step)));
         }
     }
 
-    private static void ValidateObject(JsonObject schema, JsonObject value, List<string> path, Action<IReadOnlyList<string>, string> report)
+    private static void ValidateObject(JsonObject schema, JsonObject value, List<string> path, Action<IReadOnlyList<string>, ErrorMessage> report)
     {
         if (schema["required"] is JsonArray required)
         {
@@ -144,7 +144,7 @@ internal static class JsonSchemaLite
             {
                 if (value[name] is null)
                 {
-                    report([.. path, name], "This field is required.");
+                    report([.. path, name], ErrorMessage.Of("required", DynamicValidationCodes.Required));
                 }
             }
         }
@@ -161,7 +161,7 @@ internal static class JsonSchemaLite
             {
                 if (additional is JsonValue v && v.GetValueKind() == JsonValueKind.False)
                 {
-                    report(childPath, "Unknown field.");
+                    report(childPath, ErrorMessage.Of("unknownField", DynamicValidationCodes.UnknownField));
                 }
                 else
                 {
@@ -172,25 +172,25 @@ internal static class JsonSchemaLite
 
         if (Int(schema, "minProperties") is { } min && value.Count < min)
         {
-            report(path, $"Must have at least {min} field{Plural(min)}.");
+            report(path, ErrorMessage.Counted("minProperties", DynamicValidationCodes.MinProperties, min, min));
         }
 
         if (Int(schema, "maxProperties") is { } max && value.Count > max)
         {
-            report(path, $"Must have at most {max} field{Plural(max)}.");
+            report(path, ErrorMessage.Counted("maxProperties", DynamicValidationCodes.MaxProperties, max, max));
         }
     }
 
-    private static void ValidateArray(JsonObject schema, JsonArray value, List<string> path, Action<IReadOnlyList<string>, string> report)
+    private static void ValidateArray(JsonObject schema, JsonArray value, List<string> path, Action<IReadOnlyList<string>, ErrorMessage> report)
     {
         if (Int(schema, "minItems") is { } min && value.Count < min)
         {
-            report(path, $"Must contain at least {min} item{Plural(min)}.");
+            report(path, ErrorMessage.Counted("minItems", DynamicValidationCodes.MinItems, min, min));
         }
 
         if (Int(schema, "maxItems") is { } max && value.Count > max)
         {
-            report(path, $"Must contain at most {max} item{Plural(max)}.");
+            report(path, ErrorMessage.Counted("maxItems", DynamicValidationCodes.MaxItems, max, max));
         }
 
         if (schema["uniqueItems"] is JsonValue unique && unique.GetValueKind() == JsonValueKind.True)
@@ -199,7 +199,7 @@ internal static class JsonSchemaLite
             {
                 if (Enumerable.Range(0, i).Any(j => JsonValues.DeepEquals(value[i], value[j])))
                 {
-                    report([.. path, i.ToString()], "Duplicate item.");
+                    report([.. path, i.ToString()], ErrorMessage.Of("uniqueItems", DynamicValidationCodes.UniqueItems));
                 }
             }
         }
@@ -228,8 +228,6 @@ internal static class JsonSchemaLite
 
     private static decimal? Number(JsonObject schema, string keyword) =>
         JsonValues.TryGetNumber(schema[keyword], out var d) ? d : null;
-
-    private static string Plural(int n) => n == 1 ? string.Empty : "s";
 
     // ------------------------------------------------------------------ schema checks
 

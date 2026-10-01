@@ -16,7 +16,11 @@ internal sealed class TestHost(WebApplication app) : IAsyncDisposable
 
     public IDynamicEndpointManager Manager => app.Services.GetRequiredService<IDynamicEndpointManager>();
 
-    public static async Task<TestHost> StartAsync(string? sqlitePath = null, Action<DynamicEndpointsOptions>? options = null, Action<IDynamicEndpointsBuilder>? configure = null)
+    public static async Task<TestHost> StartAsync(
+        string? sqlitePath = null,
+        Action<DynamicEndpointsOptions>? options = null,
+        Action<IDynamicEndpointsBuilder>? configure = null,
+        Action<WebApplication>? configureApp = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseTestServer();
@@ -45,6 +49,7 @@ internal sealed class TestHost(WebApplication app) : IAsyncDisposable
             await scope.ServiceProvider.GetRequiredService<DynamicEndpointsDbContext>().Database.EnsureCreatedAsync();
         }
 
+        configureApp?.Invoke(app);
         app.MapGet("/health", () => "ok");
         app.MapDynamicEndpoints();
         app.MapDynamicEndpointsAdmin("/admin/endpoints");

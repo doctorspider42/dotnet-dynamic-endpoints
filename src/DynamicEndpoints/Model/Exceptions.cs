@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace DynamicEndpoints;
 
 public class DynamicEndpointException(string message) : Exception(message);
@@ -20,12 +22,20 @@ public sealed class DynamicEndpointNotFoundException(Guid id)
     public Guid Id { get; } = id;
 }
 
-public sealed class DynamicEndpointConcurrencyException(Guid id, int expectedVersion, int? actualVersion)
-    : DynamicEndpointException(actualVersion is null
-        ? $"Dynamic endpoint '{id}' was modified concurrently (expected version {expectedVersion})."
-        : $"Dynamic endpoint '{id}' was modified concurrently (expected version {expectedVersion}, current version {actualVersion}).")
+public sealed class DynamicEndpointConcurrencyException(Guid id, int expectedRevision, int? actualRevision)
+    : DynamicEndpointException(actualRevision is null
+        ? $"Dynamic endpoint '{id}' was modified concurrently (expected revision {expectedRevision})."
+        : $"Dynamic endpoint '{id}' was modified concurrently (expected revision {expectedRevision}, current revision {actualRevision}).")
 {
     public Guid Id { get; } = id;
-    public int ExpectedVersion { get; } = expectedVersion;
-    public int? ActualVersion { get; } = actualVersion;
+    public int ExpectedRevision { get; } = expectedRevision;
+    public int? ActualRevision { get; } = actualRevision;
+
+    [Obsolete("Renamed to ExpectedRevision.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int ExpectedVersion => ExpectedRevision;
+
+    [Obsolete("Renamed to ActualRevision.")]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int? ActualVersion => ActualRevision;
 }

@@ -79,17 +79,20 @@ public sealed class DynamicEndpoint
     public DynamicEndpoint FromHeader(string name, Action<ParameterBuilder>? configure = null) => Parameter(name, ParameterSource.Header, configure);
     public DynamicEndpoint FromBody(string name, Action<ParameterBuilder>? configure = null) => Parameter(name, ParameterSource.Body, configure);
 
+    /// <summary>A field of a <c>multipart/form-data</c> or <c>application/x-www-form-urlencoded</c> body – use <c>p.File()</c> for uploads.</summary>
+    public DynamicEndpoint FromForm(string name, Action<ParameterBuilder>? configure = null) => Parameter(name, ParameterSource.Form, configure);
+
     /// <summary>Adds a JsonLogic business rule, e.g. <c>{"&lt;": [{"var": "from"}, {"var": "to"}]}</c>.</summary>
-    public DynamicEndpoint WithRule(string condition, string message, string? parameter = null) =>
-        WithRule(JsonNode.Parse(condition), message, parameter);
+    public DynamicEndpoint WithRule(string condition, string message, string? parameter = null, string? code = null) =>
+        WithRule(JsonNode.Parse(condition), message, parameter, code);
 
     /// <summary>Attaches a request-level custom validator (runs after parameters and rules passed).</summary>
     public DynamicEndpoint ValidatedBy(string validator, object? configuration = null) =>
         Set(d => d with { Validators = [.. d.Validators, new ValidatorReference { Name = validator, Config = ToObject(configuration) }] });
 
-    public DynamicEndpoint WithRule(JsonNode? condition, string message, string? parameter = null)
+    public DynamicEndpoint WithRule(JsonNode? condition, string message, string? parameter = null, string? code = null)
     {
-        _rules.Add(new ValidationRuleDefinition { Condition = condition, Message = message, Parameter = parameter });
+        _rules.Add(new ValidationRuleDefinition { Condition = condition, Message = message, Parameter = parameter, Code = code });
         return this;
     }
 
@@ -145,6 +148,17 @@ public sealed class ParameterBuilder
     public ParameterBuilder Phone() => String().Format(ParameterFormat.Phone);
     public ParameterBuilder ArrayOf(ParameterType itemType) => Set(p => p with { Type = ParameterType.Array, ItemType = itemType });
 
+    /// <summary>An uploaded file (form parameters only), optionally limited in size and content type (<c>image/*</c> wildcards allowed).</summary>
+    public ParameterBuilder File(long? maxSize = null, params string[] contentTypes) =>
+        Set(p => p with { Type = ParameterType.File, ItemType = null }).Limit(maxSize, contentTypes);
+
+    /// <summary>Any number of uploaded files sent under the same name (form parameters only).</summary>
+    public ParameterBuilder Files(long? maxSize = null, params string[] contentTypes) =>
+        Set(p => p with { Type = ParameterType.Array, ItemType = ParameterType.File }).Limit(maxSize, contentTypes);
+
+    public ParameterBuilder MaxFileSize(long bytes) => Set(p => p with { MaxFileSize = bytes });
+    public ParameterBuilder ContentTypes(params string[] contentTypes) => Set(p => p with { AllowedContentTypes = contentTypes });
+
     /// <summary>JSON object (body only), optionally described by a JSON Schema.</summary>
     public ParameterBuilder Object(string? jsonSchema = null) =>
         Set(p => p with { Type = ParameterType.Object, Schema = jsonSchema is null ? null : DynamicEndpoint.ToObject(jsonSchema) });
@@ -181,6 +195,12 @@ public sealed class ParameterBuilder
         ValidatedBy(ValidatorRegistry.Describe(typeof(TValidator), null, null).Name, configuration);
 
     private ParameterBuilder Type(ParameterType type) => Set(p => p with { Type = type });
+
+    private ParameterBuilder Limit(long? maxSize, string[] contentTypes) => Set(p => p with
+    {
+        MaxFileSize = maxSize ?? p.MaxFileSize,
+        AllowedContentTypes = contentTypes.Length > 0 ? contentTypes : p.AllowedContentTypes,
+    });
 
     private ParameterBuilder Set(Func<ParameterDefinition, ParameterDefinition> change)
     {

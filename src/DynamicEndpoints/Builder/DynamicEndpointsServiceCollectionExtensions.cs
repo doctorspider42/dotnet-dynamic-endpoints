@@ -144,6 +144,27 @@ public static class DynamicEndpointsServiceCollectionExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Adds a filter that runs for every dynamic endpoint request – before validation (access checks) and when a request is
+    /// rejected (custom error format, logging, metering). Filters are scoped and run in registration order.
+    /// </summary>
+    public static IDynamicEndpointsBuilder AddFilter<TFilter>(this IDynamicEndpointsBuilder builder)
+        where TFilter : class, IDynamicEndpointFilter
+    {
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IDynamicEndpointFilter, TFilter>());
+        return builder;
+    }
+
+    /// <summary>Adds an inline filter – see <see cref="IDynamicEndpointFilter"/>.</summary>
+    public static IDynamicEndpointsBuilder AddFilter(
+        this IDynamicEndpointsBuilder builder,
+        Func<DynamicEndpointRequestContext, ValueTask>? onRequest = null,
+        Func<DynamicValidationFailedContext, ValueTask>? onValidationFailed = null)
+    {
+        builder.Services.AddSingleton<IDynamicEndpointFilter>(new DelegateFilter(onRequest, onValidationFailed));
+        return builder;
+    }
+
     /// <summary>Uses a custom persistence implementation (scoped).</summary>
     public static IDynamicEndpointsBuilder UseStore<TStore>(this IDynamicEndpointsBuilder builder)
         where TStore : class, IDynamicEndpointStore

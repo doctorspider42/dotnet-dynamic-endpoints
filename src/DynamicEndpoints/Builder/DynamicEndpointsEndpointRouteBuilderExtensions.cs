@@ -72,7 +72,7 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
 
         group.MapPut("/{id:guid}", (Guid id, DynamicEndpointDefinition definition, IDynamicEndpointManager manager, CancellationToken ct) =>
                 Guard(async () => TypedResults.Ok(await manager.UpdateAsync(definition with { Id = id }, ct))))
-            .WithSummary("Replaces an endpoint definition. 'version' must match the stored version.")
+            .WithSummary("Replaces an endpoint definition. 'revision' must match the stored revision.")
             .Produces<DynamicEndpointDefinition>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
