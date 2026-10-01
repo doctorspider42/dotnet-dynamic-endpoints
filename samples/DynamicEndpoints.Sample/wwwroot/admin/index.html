@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Endpoints – Admin</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --border: #e3e6eb;
+    --accent: #4f46e5; --accent-text: #fff; --danger: #d92d20; --ok: #079455; --warn: #b54708;
+    --code-bg: #f2f4f7; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+    --get: #2563eb; --post: #059669; --put: #d97706; --patch: #7c3aed; --delete: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --panel: #171b23; --text: #e6e9ef; --muted: #98a2b3; --border: #2a303c;
+      --accent: #818cf8; --accent-text: #0f1218; --code-bg: #10141b; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 17px; margin: 0; }
+  header nav { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  a { color: var(--accent); }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  button, .btn { font: inherit; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  button:hover, .btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.danger { color: var(--danger); }
+  button.small { padding: 3px 8px; font-size: 12px; }
+  button:disabled { opacity: .5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.actions { white-space: nowrap; text-align: right; }
+  td.actions button { margin-left: 4px; }
+  .method { display: inline-block; min-width: 62px; text-align: center; font: 600 12px ui-monospace, monospace; padding: 3px 6px; border-radius: 4px; color: #fff; }
+  .m-GET { background: var(--get); } .m-POST { background: var(--post); } .m-PUT { background: var(--put); } .m-PATCH { background: var(--patch); } .m-DELETE { background: var(--delete); }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
+  .status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; }
+  .s-Active { color: var(--ok); } .s-Disabled { color: var(--muted); } .s-Invalid { color: var(--danger); } .s-Pending { color: var(--warn); }
+  .muted { color: var(--muted); }
+  .empty { padding: 40px; text-align: center; color: var(--muted); background: var(--panel); border: 1px dashed var(--border); border-radius: 8px; }
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .toolbar h2 { margin: 0; font-size: 16px; }
+  .toolbar .spacer { flex: 1; }
+
+  /* drawer */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 10; display: none; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(860px, 100vw); background: var(--bg); z-index: 11; display: none; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.2); }
+  .open .backdrop { display: block; } .open .drawer { display: flex; }
+  .drawer > .head { padding: 14px 20px; display: flex; align-items: center; gap: 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .drawer > .head h2 { margin: 0; font-size: 16px; flex: 1; }
+  .drawer > .body { padding: 20px; overflow: auto; flex: 1; }
+  .drawer > .foot { padding: 12px 20px; display: flex; gap: 8px; justify-content: flex-end; background: var(--panel); border-top: 1px solid var(--border); }
+
+  section.card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  section.card > h3 { margin: 0 0 12px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  section.card > h3 .spacer { flex: 1; }
+  .grid { display: grid; gap: 10px 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .grid .wide { grid-column: 1 / -1; }
+  .grid .half { grid-column: span 2; }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  label.check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; }
+  input[type=checkbox] { width: auto; }
+  textarea { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; min-height: 64px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .item { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--bg); }
+  .item .item-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; font-weight: 600; }
+  .item .item-head .spacer { flex: 1; }
+  .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+  .errors { border: 1px solid var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+  .errors ul { margin: 4px 0 0; padding-left: 18px; }
+  .success { border: 1px solid var(--ok); color: var(--ok); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+  .invalid { border-color: var(--danger) !important; }
+  pre.response { background: var(--code-bg); border: 1px solid var(--border); padding: 12px; border-radius: 8px; overflow: auto; max-height: 420px; margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: var(--code-bg); border: 1px solid var(--border); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 6px; z-index: 20; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 720px) {
+    main { padding: 12px; } header { padding: 12px; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Dynamic Endpoints</h1>
+  <span class="muted hide-sm">runtime-defined, persistent HTTP endpoints</span>
+  <nav>
+    <a class="btn" href="/swagger" target="_blank">Swagger UI ↗</a>
+    <a class="btn hide-sm" href="/openapi/dynamic.json" target="_blank">OpenAPI JSON ↗</a>
+  </nav>
+</header>
+
+<main>
+  <div class="toolbar">
+    <h2>Endpoints</h2>
+    <span class="muted" id="count"></span>
+    <span class="spacer"></span>
+    <button onclick="reloadFromStore()" title="Re-read definitions from the database">↻ Reload</button>
+    <button class="primary" onclick="openEditor()">＋ New endpoint</button>
+  </div>
+  <div id="list"></div>
+</main>
+
+<div id="shell">
+  <div class="backdrop" onclick="closeDrawer()"></div>
+  <div class="drawer" role="dialog" aria-modal="true">
+    <div class="head"><h2 id="drawer-title"></h2><button onclick="closeDrawer()" aria-label="Close">✕</button></div>
+    <div class="body" id="drawer-body"></div>
+    <div class="foot" id="drawer-foot"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/admin/endpoints';
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const SOURCES = ['Route', 'Query', 'Header', 'Body'];
+const TYPES = ['String', 'Integer', 'Number', 'Boolean', 'Date', 'DateTime', 'Guid', 'Array', 'Object'];
+const SCALARS = ['String', 'Integer', 'Number', 'Boolean', 'Date', 'DateTime', 'Guid'];
+const FORMATS = ['', 'Email', 'Uri', 'Phone', 'Ipv4', 'Ipv6', 'Time'];
+
+let endpoints = [];
+let processors = [];
+let validators = [];
+let draft = null;      // definition being edited
+let draftErrors = {};  // validation errors keyed by path
+
+// ---------- helpers ----------
+const $ = (sel) => document.querySelector(sel);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const json = (v) => v === undefined || v === null ? '' : JSON.stringify(v, null, 2);
+
+function toast(message) {
+  const t = $('#toast'); t.textContent = message; t.classList.add('show');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(API + path, {
+    ...options,
+    headers: options.body ? { 'Content-Type': 'application/json' } : {},
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { ok: response.ok, status: response.status, data };
+}
+
+// ---------- list ----------
+async function load() {
+  const [list, procs, vals] = await Promise.all([api('/'), api('/processors'), api('/validators')]);
+  endpoints = list.data || [];
+  processors = procs.data || [];
+  validators = vals.data || [];
+  renderList();
+}
+
+function renderList() {
+  $('#count').textContent = endpoints.length ? `${endpoints.length} total` : '';
+  if (!endpoints.length) {
+    $('#list').innerHTML = `<div class="empty">No endpoints yet. Click <b>New endpoint</b> to publish your first one.</div>`;
+    return;
+  }
+  $('#list').innerHTML = `<table>
+    <thead><tr><th>Method</th><th>Route</th><th class="hide-sm">Name</th><th class="hide-sm">Group</th><th class="hide-sm">Processor</th><th>Status</th><th class="hide-sm">Ver.</th><th></th></tr></thead>
+    <tbody>${endpoints.map(({ definition: d, status, errors }) => `
+      <tr>
+        <td><span class="method m-${d.method}">${d.method}</span></td>
+        <td><code>${esc(d.route)}</code></td>
+        <td class="hide-sm">${esc(d.name) || '<span class="muted">—</span>'}</td>
+        <td class="hide-sm">${esc(d.group) || '<span class="muted">—</span>'}</td>
+        <td class="hide-sm"><span class="badge">${esc(d.processor || 'default')}</span></td>
+        <td><span class="status s-${status}" title="${esc((errors || []).join('\n'))}">${status}</span></td>
+        <td class="hide-sm muted">v${d.version}</td>
+        <td class="actions">
+          <button class="small" onclick="openTester('${d.id}')" ${status !== 'Active' ? 'disabled' : ''}>▶ Try</button>
+          <button class="small" onclick="openEditor('${d.id}')">Edit</button>
+          <button class="small" onclick="toggle('${d.id}', ${!d.enabled})">${d.enabled ? 'Disable' : 'Enable'}</button>
+          <button class="small danger" onclick="removeEndpoint('${d.id}')">Delete</button>
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function toggle(id, enable) {
+  const r = await api(`/${id}/${enable ? 'enable' : 'disable'}`, { method: 'POST' });
+  if (!r.ok) alert(problemText(r.data));
+  else toast(enable ? 'Endpoint enabled' : 'Endpoint disabled');
+  await load();
+}
+
+async function removeEndpoint(id) {
+  const e = endpoints.find(x => x.definition.id === id).definition;
+  if (!confirm(`Delete ${e.method} ${e.route}? This cannot be undone.`)) return;
+  await api(`/${id}`, { method: 'DELETE' });
+  toast('Endpoint deleted');
+  await load();
+}
+
+async function reloadFromStore() {
+  await api('/reload', { method: 'POST' });
+  await load();
+  toast('Reloaded from database');
+}
+
+function problemText(p) {
+  if (!p || typeof p !== 'object') return String(p ?? 'Request failed');
+  const errs = p.errors ? Object.entries(p.errors).map(([k, v]) => `${k}: ${v.join(' ')}`).join('\n') : '';
+  return [p.title, p.detail, errs].filter(Boolean).join('\n');
+}
+
+// ---------- drawer ----------
+function openDrawer(title) { $('#drawer-title').textContent = title; document.getElementById('shell').classList.add('open'); }
+function closeDrawer() { document.getElementById('shell').classList.remove('open'); draft = null; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// ---------- editor ----------
+function openEditor(id) {
+  const existing = id ? endpoints.find(x => x.definition.id === id).definition : null;
+  draft = existing ? structuredClone(existing) : {
+    method: 'GET', route: '/', name: '', description: '', group: '', processor: processors[0]?.name ?? '',
+    processorConfig: processors[0]?.configurationExample ?? null, parameters: [], rules: [], validators: [], enabled: true,
+  };
+  draft.parameters ??= []; draft.rules ??= []; draft.validators ??= [];
+  draftErrors = {};
+  openDrawer(existing ? `Edit ${existing.method} ${existing.route}` : 'New endpoint');
+  renderEditor();
+  $('#drawer-foot').innerHTML = `
+    <span class="muted" style="margin-right:auto;align-self:center">${existing ? `version ${existing.version}` : 'Saving publishes the endpoint immediately'}</span>
+    <button onclick="closeDrawer()">Cancel</button>
+    <button onclick="validateDraft()">Validate</button>
+    <button class="primary" onclick="saveDraft()">${existing ? 'Save & publish' : 'Create & publish'}</button>`;
+}
+
+function field(label, html, cls = '') { return `<label class="field ${cls}">${label}${html}</label>`; }
+function errClass(path) { return draftErrors[path] ? 'invalid' : ''; }
+// Merges a class="" passed in attrs with the error class, so an element never gets two class attributes.
+function withClass(path, attrs) {
+  let cls = errClass(path);
+  attrs = attrs.replace(/class="([^"]*)"/, (_, c) => { cls += ' ' + c; return ''; });
+  return `class="${cls.trim()}" data-path="${path}" ${attrs}`;
+}
+function input(path, value, attrs = '') {
+  return `<input ${withClass(path, attrs)} value="${esc(value)}">`;
+}
+function select(path, value, options, attrs = '') {
+  return `<select ${withClass(path, attrs)}>${options.map(o => `<option ${o === value ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+}
+function textarea(path, value, attrs = '') {
+  return `<textarea ${withClass(path, attrs)} data-json="1" spellcheck="false">${esc(value)}</textarea>`;
+}
+
+function renderEditor() {
+  const d = draft;
+  const proc = processors.find(p => p.name.toLowerCase() === (d.processor || '').toLowerCase());
+  const errorList = Object.entries(draftErrors);
+  const paramNames = d.parameters.map(p => p.name).filter(Boolean);
+  const requestValidators = validators.filter(v => v.forRequests);
+
+  $('#drawer-body').innerHTML = `
+    ${errorList.length ? `<div class="errors"><b>Fix these problems:</b><ul>${errorList.map(([k, v]) => `<li><code>${esc(k)}</code>: ${esc(v.join(' '))}</li>`).join('')}</ul></div>` : ''}
+    <div id="validation-ok"></div>
+
+    <section class="card">
+      <h3>Endpoint</h3>
+      <div class="grid">
+        ${field('Method', select('method', d.method, METHODS))}
+        ${field('Route', input('route', d.route, 'placeholder="/orders/{id}" class="mono"'), 'half')}
+        ${field('Name', input('name', d.name, 'placeholder="Create order"'))}
+        ${field('Description', input('description', d.description), 'wide')}
+        ${field('Group <span class="muted">(section in Swagger UI)</span>', input('group', d.group, 'placeholder="Dynamic" list="groups"'), 'half')}
+        <datalist id="groups">${[...new Set(endpoints.map(e => e.definition.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist>
+        <label class="check"><input type="checkbox" data-path="enabled" ${d.enabled ? 'checked' : ''}> Enabled</label>
+      </div>
+      <p class="hint">Route parameters like <code>{id}</code> need a parameter with source <b>Route</b> — <a href="#" onclick="syncRouteParams();return false">add missing ones</a>.</p>
+    </section>
+
+    <section class="card">
+      <h3>Processor</h3>
+      <div class="grid">
+        ${field('Processor', select('processor', proc?.name ?? d.processor, processors.map(p => p.name)))}
+        <div class="half" style="align-self:end">${proc?.description ? `<span class="muted">${esc(proc.description)}</span>` : ''}</div>
+        ${field(`Configuration (JSON) ${proc?.configurationExample ? `<a href="#" onclick="useExample();return false">use example</a>` : ''}`,
+          textarea('processorConfig', json(d.processorConfig), 'rows="4"'), 'wide')}
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Parameters <span class="muted">(${d.parameters.length})</span><span class="spacer"></span><button class="small" onclick="addParameter()">＋ Add parameter</button></h3>
+      ${d.parameters.length ? d.parameters.map(renderParameter).join('') : '<p class="muted">No parameters. Requests are passed to the processor as-is.</p>'}
+    </section>
+
+    <section class="card">
+      <h3>Business rules <span class="muted">(JsonLogic)</span><span class="spacer"></span><button class="small" onclick="addRule()">＋ Add rule</button></h3>
+      ${d.rules.length ? d.rules.map((r, i) => `
+        <div class="item">
+          <div class="item-head">Rule ${i + 1}<span class="spacer"></span><button class="small danger" onclick="removeAt('rules', ${i})">Remove</button></div>
+          <div class="grid">
+            ${field('Error message', input(`rules[${i}].message`, r.message), 'half')}
+            ${field('Reported for parameter', select(`rules[${i}].parameter`, r.parameter ?? '', ['', ...paramNames]))}
+            ${field('Condition — must be truthy', textarea(`rules[${i}].condition`, json(r.condition), 'rows="3"'), 'wide')}
+          </div>
+        </div>`).join('') : ''}
+      <p class="hint">Rules run after all parameters passed validation. Example: <code>{"&lt;": [{"var": "from"}, {"var": "to"}]}</code>. Operators: <a href="https://jsonlogic.com/operations.html" target="_blank">jsonlogic.com</a>.</p>
+    </section>
+
+    <section class="card">
+      <h3>Custom validators <span class="muted">(whole request)</span><span class="spacer"></span>
+        <button class="small" onclick="addRequestValidator()" ${requestValidators.length ? '' : 'disabled title="No request-level validators registered"'}>＋ Add validator</button></h3>
+      ${d.validators.map((v, i) => {
+        const descriptor = validators.find(x => x.name.toLowerCase() === (v.name || '').toLowerCase());
+        return `
+        <div class="item">
+          <div class="item-head">${esc(v.name)}<span class="muted" style="font-weight:400">${descriptor?.description ? ' — ' + esc(descriptor.description) : ''}</span>
+            <span class="spacer"></span><button class="small danger" onclick="removeAt('validators', ${i})">Remove</button></div>
+          <div class="grid">
+            ${field('Validator', select(`validators[${i}].name`, descriptor?.name ?? v.name, requestValidators.map(x => x.name), 'data-rerender="1"'))}
+            ${field('Configuration (JSON)', textarea(`validators[${i}].config`, json(v.config), 'rows="3"'), 'wide')}
+          </div>
+        </div>`; }).join('')}
+      <p class="hint">Code validators (C# or FluentValidation) registered by developers. They run last, only when parameters and rules passed, so they may hit the database.</p>
+    </section>
+
+    <section class="card">
+      <h3>Security &amp; documentation</h3>
+      <div class="grid">
+        <label class="check"><input type="checkbox" data-path="allowAnonymous" ${d.allowAnonymous ? 'checked' : ''}> Allow anonymous</label>
+        <label class="check"><input type="checkbox" data-path="requireAuthorization" ${d.requireAuthorization ? 'checked' : ''}> Require auth</label>
+        ${field('Authorization policy', input('authorizationPolicy', d.authorizationPolicy))}
+        ${field('Rate limiting policy', input('rateLimitingPolicy', d.rateLimitingPolicy))}
+        ${field('Response schema (JSON Schema, documentation only)', textarea('responseSchema', json(d.responseSchema), 'rows="3"'), 'wide')}
+      </div>
+    </section>`;
+
+  for (const el of document.querySelectorAll('#drawer-body [data-path]')) {
+    el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', onFieldChange);
+  }
+}
+
+function renderParameter(p, i) {
+  const base = `parameters[${i}]`;
+  const t = p.type || 'String';
+  const it = p.itemType || 'String';
+  const scalarType = t === 'Array' ? it : t;
+  const showText = scalarType === 'String';
+  const showNumber = scalarType === 'Integer' || scalarType === 'Number';
+  const showEnum = SCALARS.includes(scalarType) && scalarType !== 'Boolean';
+  // Only validators that accept this parameter's type (checked again on save).
+  const parameterValidators = validators.filter(v => v.forParameters && (!v.parameterTypes?.length || v.parameterTypes.includes(t)));
+  return `
+    <div class="item">
+      <div class="item-head"><code>${esc(p.name) || 'unnamed'}</code> <span class="muted">${esc(p.source)} · ${esc(t)}${t === 'Array' ? ` of ${esc(it)}` : ''}${p.required ? ' · required' : ''}</span>
+        <span class="spacer"></span><button class="small danger" onclick="removeAt('parameters', ${i})">Remove</button></div>
+      <div class="grid">
+        ${field('Name', input(`${base}.name`, p.name, 'class="mono"'))}
+        ${field('Source', select(`${base}.source`, p.source, SOURCES, 'data-rerender="1"'))}
+        ${field('Type', select(`${base}.type`, t, TYPES, 'data-rerender="1"'))}
+        ${t === 'Array' ? field('Item type', select(`${base}.itemType`, it, SCALARS.concat(p.source === 'Body' ? ['Object'] : []), 'data-rerender="1"')) : ''}
+        ${p.source !== 'Route' ? field(p.source === 'Header' ? 'Header name' : 'Name in request', input(`${base}.sourceName`, p.sourceName, `placeholder="${esc(p.name || '')}"`)) : ''}
+        <label class="check"><input type="checkbox" data-path="${base}.required" data-rerender="1" ${p.required || p.source === 'Route' ? 'checked' : ''} ${p.source === 'Route' ? 'disabled' : ''}> Required</label>
+        ${field('Description', input(`${base}.description`, p.description), 'wide')}
+        ${showText ? field('Min length', input(`${base}.minLength`, p.minLength, 'type="number" min="0" data-number="int"')) : ''}
+        ${showText ? field('Max length', input(`${base}.maxLength`, p.maxLength, 'type="number" min="0" data-number="int"')) : ''}
+        ${showNumber ? field('Minimum', input(`${base}.minimum`, p.minimum, 'type="number" step="any" data-number="dec"')) : ''}
+        ${showNumber ? field('Maximum', input(`${base}.maximum`, p.maximum, 'type="number" step="any" data-number="dec"')) : ''}
+        ${showText ? field('Format', select(`${base}.format`, p.format ?? '', FORMATS)) : ''}
+        ${showText ? field('Pattern (regex)', input(`${base}.pattern`, p.pattern, 'class="mono" placeholder="^[a-z]+$"'), 'half') : ''}
+        ${showEnum ? field('Allowed values (comma separated)', input(`${base}.allowedValues`, (p.allowedValues || []).join(', '), 'data-list="1"'), 'half') : ''}
+        ${t === 'Array' ? field('Min items', input(`${base}.minItems`, p.minItems, 'type="number" min="0" data-number="int"')) : ''}
+        ${t === 'Array' ? field('Max items', input(`${base}.maxItems`, p.maxItems, 'type="number" min="0" data-number="int"')) : ''}
+        ${!p.required && p.source !== 'Route' ? field('Default (JSON)', input(`${base}.default`, json(p.default), 'class="mono" data-json="1" placeholder="e.g. 10 or &quot;abc&quot;"')) : ''}
+        ${field('Example (JSON)', input(`${base}.example`, json(p.example), 'class="mono" data-json="1"'))}
+        ${t === 'Object' || t === 'Array' ? field('Custom JSON Schema (optional)', textarea(`${base}.schema`, json(p.schema), 'rows="3"'), 'wide') : ''}
+        ${parameterValidators.length ? `<div class="wide"><span class="muted" style="font-size:12px">Custom validators</span><div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px">
+          ${parameterValidators.map(v => `<label class="check" title="${esc(v.description || '')}"><input type="checkbox" ${(p.validators || []).some(x => x.name.toLowerCase() === v.name.toLowerCase()) ? 'checked' : ''}
+            onchange="toggleParameterValidator(${i}, '${esc(v.name)}', this.checked)"> ${esc(v.name)}</label>`).join('')}</div></div>` : ''}
+      </div>
+    </div>`;
+}
+
+// Writes an input value into the draft object, following paths like "parameters[0].minLength".
+function onFieldChange(e) {
+  const el = e.target;
+  const path = el.dataset.path;
+  let value;
+  if (el.type === 'checkbox') value = el.checked;
+  else if (el.dataset.number) value = el.value === '' ? null : Number(el.value);
+  else if (el.dataset.json) {
+    if (el.value.trim() === '') { value = null; el.classList.remove('invalid'); }
+    else {
+      try { value = JSON.parse(el.value); el.classList.remove('invalid'); }
+      catch {
+        // Lenient for single-line inputs: unquoted text becomes a string.
+        if (el.tagName === 'INPUT') value = el.value;
+        else { el.classList.add('invalid'); return; }
+      }
+    }
+  }
+  else if (el.dataset.list) value = el.value.split(',').map(s => s.trim()).filter(Boolean);
+  else value = el.value;
+
+  setPath(draft, path, value);
+
+  if (path.endsWith('.allowedValues')) coerceAllowedValues(path);
+  if (path === 'processor') {
+    // Configurations are processor specific – start from the new processor's example.
+    const proc = processors.find(p => p.name === value);
+    draft.processorConfig = proc?.configurationExample ? structuredClone(proc.configurationExample) : null;
+    renderEditor();
+  }
+  const vm = path.match(/^validators\[(\d+)\]\.name$/);
+  if (vm) {
+    const v = validators.find(x => x.name === value);
+    draft.validators[+vm[1]].config = v?.configurationExample ? structuredClone(v.configurationExample) : null;
+  }
+  if (el.dataset.rerender) {
+    const m = path.match(/^parameters\[(\d+)\]\.source$/);
+    if (m && value === 'Route') { draft.parameters[+m[1]].required = true; }
+    renderEditor();
+  }
+}
+
+function coerceAllowedValues(path) {
+  const i = +path.match(/\[(\d+)\]/)[1];
+  const p = draft.parameters[i];
+  const type = p.type === 'Array' ? (p.itemType || 'String') : p.type;
+  if (type === 'Integer' || type === 'Number') p.allowedValues = p.allowedValues.map(v => isNaN(Number(v)) ? v : Number(v));
+}
+
+function setPath(obj, path, value) {
+  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+  let target = obj;
+  for (const part of parts.slice(0, -1)) target = target[part];
+  target[parts.at(-1)] = value;
+}
+
+function addParameter() {
+  draft.parameters.push({ name: '', source: draft.method === 'GET' || draft.method === 'DELETE' ? 'Query' : 'Body', type: 'String', required: false });
+  renderEditor();
+  const inputs = document.querySelectorAll('#drawer-body [data-path$=".name"]');
+  inputs[inputs.length - 1]?.focus();
+}
+
+function addRule() {
+  const names = draft.parameters.map(p => p.name).filter(Boolean);
+  draft.rules.push({
+    message: '', parameter: names[1] ?? null,
+    condition: names.length >= 2 ? { '<': [{ var: names[0] }, { var: names[1] }] } : { '!!': [{ var: names[0] ?? 'field' }] },
+  });
+  renderEditor();
+}
+
+function toggleParameterValidator(i, name, on) {
+  const p = draft.parameters[i];
+  const rest = (p.validators || []).filter(v => v.name.toLowerCase() !== name.toLowerCase());
+  p.validators = on ? [...rest, { name }] : rest;
+}
+
+function addRequestValidator() {
+  const v = validators.find(x => x.forRequests);
+  draft.validators.push({ name: v.name, config: v.configurationExample ? structuredClone(v.configurationExample) : null });
+  renderEditor();
+}
+
+function removeAt(collection, i) { draft[collection].splice(i, 1); renderEditor(); }
+
+function useExample() {
+  const proc = processors.find(p => p.name.toLowerCase() === (draft.processor || '').toLowerCase());
+  draft.processorConfig = structuredClone(proc.configurationExample);
+  renderEditor();
+}
+
+function syncRouteParams() {
+  const names = [...draft.route.matchAll(/\{\*{0,2}([A-Za-z_][A-Za-z0-9_]*)[^}]*\}/g)].map(m => m[1]);
+  let added = 0;
+  for (const name of names) {
+    if (!draft.parameters.some(p => p.source === 'Route' && (p.sourceName || p.name) === name)) {
+      draft.parameters.push({ name, source: 'Route', type: 'String', required: true });
+      added++;
+    }
+  }
+  renderEditor();
+  toast(added ? `Added ${added} route parameter(s)` : 'All route parameters are defined');
+}
+
+function cleanDraft() {
+  const d = structuredClone(draft);
+  d.parameters = d.parameters.map(p => {
+    const c = { ...p };
+    for (const k of Object.keys(c)) if (c[k] === '' || c[k] === null || (Array.isArray(c[k]) && !c[k].length)) delete c[k];
+    if (c.type !== 'Array') delete c.itemType;
+    if (c.source === 'Route') c.required = true;
+    return c;
+  });
+  d.rules = d.rules.map(r => ({ ...r, parameter: r.parameter || null }));
+  for (const k of ['name', 'description', 'group', 'authorizationPolicy', 'rateLimitingPolicy']) if (!d[k]) d[k] = null;
+  return d;
+}
+
+async function validateDraft() {
+  const r = await api('/validate', { method: 'POST', body: cleanDraft() });
+  if (!r.ok) { draftErrors = r.data?.errors ?? { request: [problemText(r.data)] }; renderEditor(); return; }
+  draftErrors = r.data.isValid ? {} : r.data.errors;
+  renderEditor();
+  if (r.data.isValid) $('#validation-ok').innerHTML = '<div class="success">✓ Definition is valid.</div>';
+  $('#drawer-body').scrollTop = 0;
+}
+
+async function saveDraft() {
+  const body = cleanDraft();
+  const r = body.id
+    ? await api(`/${body.id}`, { method: 'PUT', body })
+    : await api('/', { method: 'POST', body });
+  if (r.ok) {
+    toast(body.id ? 'Saved & published' : 'Created & published');
+    closeDrawer();
+    await load();
+    return;
+  }
+  draftErrors = r.data?.errors ?? { request: [problemText(r.data)] };
+  renderEditor();
+  $('#drawer-body').scrollTop = 0;
+}
+
+// ---------- tester ----------
+function openTester(id) {
+  const d = endpoints.find(x => x.definition.id === id).definition;
+  const nonBody = d.parameters.filter(p => p.source !== 'Body');
+  const body = Object.fromEntries(d.parameters.filter(p => p.source === 'Body').map(p => [p.sourceName || p.name, sample(p)]));
+  openDrawer(`Try ${d.method} ${d.route}`);
+  $('#drawer-body').innerHTML = `
+    <section class="card">
+      <h3><span class="method m-${d.method}">${d.method}</span> <code>${esc(d.route)}</code></h3>
+      ${d.description ? `<p class="muted">${esc(d.description)}</p>` : ''}
+      ${nonBody.length ? `<div class="grid">${nonBody.map(p => field(
+        `${esc(p.sourceName || p.name)} <span class="muted">(${p.source.toLowerCase()}, ${p.type}${p.required || p.source === 'Route' ? ', required' : ''})</span>`,
+        `<input data-test="${esc(p.sourceName || p.name)}" data-source="${p.source}" value="${esc(sampleText(p))}" class="mono">`)).join('')}</div>` : ''}
+      ${d.method === 'GET' || d.method === 'DELETE' ? '' : field('Body (JSON)', `<textarea id="test-body" rows="8" spellcheck="false">${esc(json(body))}</textarea>`)}
+      <p class="hint">Array query parameters: separate values with commas. Clear a field to omit it.</p>
+    </section>
+    <section class="card"><h3>Response <span id="test-status"></span></h3><pre class="response" id="test-response">Click “Send”.</pre></section>`;
+  $('#drawer-foot').innerHTML = `<a class="btn" href="/swagger" target="_blank" style="margin-right:auto">Open in Swagger UI ↗</a>
+    <button onclick="closeDrawer()">Close</button><button class="primary" onclick="sendTest('${id}')">Send ▶</button>`;
+}
+
+function sample(p) {
+  if (p.example !== undefined && p.example !== null) return p.example;
+  if (p.default !== undefined && p.default !== null) return p.default;
+  if (p.allowedValues?.length) return p.allowedValues[0];
+  return { String: 'text', Integer: p.minimum ?? 1, Number: p.minimum ?? 1.5, Boolean: true, Date: new Date().toISOString().slice(0, 10),
+    DateTime: new Date().toISOString(), Guid: crypto.randomUUID(), Array: [], Object: {} }[p.type] ?? null;
+}
+function sampleText(p) { const v = sample(p); return Array.isArray(v) ? v.join(',') : (v ?? ''); }
+
+async function sendTest(id) {
+  const d = endpoints.find(x => x.definition.id === id).definition;
+  let path = d.route;
+  const query = new URLSearchParams();
+  const headers = {};
+  for (const el of document.querySelectorAll('[data-test]')) {
+    const name = el.dataset.test, value = el.value;
+    if (value === '') continue;
+    if (el.dataset.source === 'Route') path = path.replace(new RegExp(`\\{\\*{0,2}${name}[^}]*\\}`, 'i'), encodeURIComponent(value));
+    else if (el.dataset.source === 'Query') value.split(',').forEach(v => query.append(name, v.trim()));
+    else headers[name] = value;
+  }
+  const bodyEl = $('#test-body');
+  if (bodyEl && bodyEl.value.trim()) headers['Content-Type'] = 'application/json';
+  const url = path + (query.size ? `?${query}` : '');
+  const started = performance.now();
+  const response = await fetch(url, { method: d.method, headers, body: bodyEl && bodyEl.value.trim() ? bodyEl.value : undefined });
+  const ms = Math.round(performance.now() - started);
+  const text = await response.text();
+  let pretty = text;
+  try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { }
+  $('#test-status').innerHTML = `<span class="status ${response.ok ? 's-Active' : 's-Invalid'}">${response.status}</span> <span class="muted">${ms} ms · ${esc(d.method)} ${esc(url)}</span>`;
+  $('#test-response').textContent = pretty || '(empty body)';
+}
+
+load();
+</script>
+</body>
+</html>

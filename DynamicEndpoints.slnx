@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/DynamicEndpoints.Sample/DynamicEndpoints.Sample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DynamicEndpoints.EntityFrameworkCore/DynamicEndpoints.EntityFrameworkCore.csproj" />
+    <Project Path="src/DynamicEndpoints.FluentValidation/DynamicEndpoints.FluentValidation.csproj" />
+    <Project Path="src/DynamicEndpoints/DynamicEndpoints.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DynamicEndpoints.Tests/DynamicEndpoints.Tests.csproj" />
+  </Folder>
+</Solution>

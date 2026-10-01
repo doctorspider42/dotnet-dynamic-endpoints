@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>DynamicEndpoints</PackageId>
+    <Description>Runtime-defined, persistent HTTP endpoints for ASP.NET Core: declarative parameter binding, JSON Schema constraints, JsonLogic business rules, custom validators and OpenAPI 3.1 generation. No third-party dependencies.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicEndpoints.Tests" />
+    <InternalsVisibleTo Include="DynamicEndpoints.FluentValidation" />
+  </ItemGroup>
+
+</Project>

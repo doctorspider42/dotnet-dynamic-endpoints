@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore DynamicEndpoints.slnx
+
+      - name: Build
+        run: dotnet build DynamicEndpoints.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test DynamicEndpoints.slnx --configuration Release --no-build --logger "console;verbosity=normal"
