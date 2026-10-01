@@ -1,51 +1,93 @@
 name: Release
 
-# Publishes the NuGet packages when a version tag is pushed:
-#   git tag v0.1.0 && git push origin v0.1.0
+# Every push to main publishes a new version to NuGet:
+#   major.minor  – from <VersionPrefix> in Directory.Build.props (bump it by hand for minor/major releases)
+#   patch        – last released v{major}.{minor}.* tag + 1 (starts at 0 after a prefix bump)
+# After a successful publish the commit is tagged and a GitHub Release with generated notes is created.
 # Authentication uses NuGet Trusted Publishing (OIDC) – no long-lived API key is stored in the repository.
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
+
+# Releases run one at a time, so two quick pushes can never compute the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: read
-  id-token: write # lets the job request the OIDC token NuGet exchanges for a short-lived API key
+  contents: write # tag + GitHub Release
+  id-token: write # OIDC token exchanged by NuGet for a short-lived API key
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags are needed to compute the next version
 
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
-      - name: Version from tag
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Compute version
+        id: version
+        run: |
+          prefix=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
+          major_minor=$(echo "$prefix" | cut -d. -f1,2)
+          last=$(git tag -l "v$major_minor.*" | sed "s/^v$major_minor\.//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+          version="$major_minor.$(( ${last:--1} + 1 ))"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore
         run: dotnet restore DynamicEndpoints.slnx
 
       - name: Build
-        run: dotnet build DynamicEndpoints.slnx --configuration Release --no-restore -p:Version=$VERSION
+        run: dotnet build DynamicEndpoints.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
         run: dotnet test DynamicEndpoints.slnx --configuration Release --no-build
 
       - name: Pack
-        run: dotnet pack DynamicEndpoints.slnx --configuration Release --no-build -p:Version=$VERSION --output artifacts
+        run: dotnet pack DynamicEndpoints.slnx --configuration Release --no-build -p:Version=${{ steps.version.outputs.version }} --output artifacts
+
+      - name: Check NuGet configuration
+        id: nuget
+        env:
+          NUGET_USER: ${{ secrets.NUGET_USER }}
+        run: |
+          if [ -n "$NUGET_USER" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Secret NUGET_USER is not set – packages were built and tested but not published."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: NuGet login (OIDC)
+        if: steps.nuget.outputs.enabled == 'true'
         uses: NuGet/login@v1
         id: login
         with:
           user: ${{ secrets.NUGET_USER }}
 
-      - name: Push
+      - name: Publish to NuGet
+        if: steps.nuget.outputs.enabled == 'true'
         run: >
           dotnet nuget push "artifacts/*.nupkg"
           --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
+
+      - name: Tag and GitHub Release
+        if: steps.nuget.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "v${{ steps.version.outputs.version }}"
+          artifacts/*.nupkg
+          --target "$GITHUB_SHA"
+          --title "v${{ steps.version.outputs.version }}"
+          --generate-notes

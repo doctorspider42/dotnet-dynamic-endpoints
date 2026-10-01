@@ -384,13 +384,14 @@ dotnet run --project samples/DynamicEndpoints.Sample
 
 ## 🚢 Releasing
 
-Push a version tag and `.github/workflows/release.yml` builds, tests, packs and publishes to NuGet through
-[Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing). No API key is stored in the repo.
+**Every push to `main` is a release.** `.github/workflows/release.yml` builds, tests, packs and publishes to NuGet through
+[Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) (no API key in the repo), then tags the commit and
+creates a GitHub Release with generated notes.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+| Version part | Comes from |
+|---|---|
+| `major.minor` | `<VersionPrefix>` in `Directory.Build.props`. Bump it by hand |
+| `patch` | the last `vX.Y.*` tag + 1. Automatic, gap-free, resets after a prefix bump |
 
 ## 🛠️ Building & testing
 
@@ -415,7 +416,7 @@ tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLit
 - [x] Assembly scanning & seeding
 - [x] Zero-dependency core (built-in JSON Schema subset & JsonLogic engine)
 - [x] Built-in string formats
-- [x] NuGet packages via Trusted Publishing
+- [x] Continuous delivery: every push to `main` publishes a new NuGet version
 - [ ] Draft → publish workflow with version history and rollback
 - [ ] Redis pub/sub change notifier package
 - [ ] Admin UI as a reusable package

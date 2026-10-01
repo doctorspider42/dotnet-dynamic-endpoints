@@ -8,7 +8,8 @@
 
   <!-- NuGet package metadata -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <!-- major.minor is released from here; the patch number is set by the release workflow on every push to main -->
+    <VersionPrefix>0.1.0</VersionPrefix>
     <Authors>Pawel Pajak</Authors>
     <Copyright>Copyright (c) 2026 Pawel Pajak</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
