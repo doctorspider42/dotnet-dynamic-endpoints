@@ -394,6 +394,8 @@ creates a GitHub Release with generated notes.
 | `major.minor` | `<VersionPrefix>` in `Directory.Build.props`. Bump it by hand |
 | `patch` | the last `vX.Y.*` tag + 1. Automatic, gap-free, resets after a prefix bump |
 
+Pushes that only touch `README.md`, `docs/` or `samples/` are not released.
+
 Release notes come from [`CHANGELOG.md`](CHANGELOG.md). Add entries under **[Unreleased]** together with your change, and the
 workflow moves them under the released version. Pushes without entries get auto-generated notes only, and no bot commit.
 After a release with entries, run `git pull` before your next commit (the workflow committed the changelog).

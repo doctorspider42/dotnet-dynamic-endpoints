@@ -9,6 +9,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Every NuGet package now ships its own README, shown on nuget.org.
+
+### Changed
+
+- Pushes that only touch `README.md`, `docs/` or `samples/` no longer publish a new version.
+
 ## [0.1.1] - 2026-10-01
 
 ### Added

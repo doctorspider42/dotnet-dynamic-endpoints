@@ -10,6 +10,11 @@ name: Release
 on:
   push:
     branches: [main]
+    # Documentation and the sample app are not part of the packages – changes there alone don't release.
+    paths-ignore:
+      - README.md
+      - docs/**
+      - samples/**
   workflow_dispatch:
 
 # Releases run one at a time, so two quick pushes can never compute the same version.
