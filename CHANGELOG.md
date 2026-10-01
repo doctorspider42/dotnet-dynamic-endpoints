@@ -9,6 +9,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-01
+
 ### Added
 
 - **File uploads and forms.** `Form` parameters read `multipart/form-data` and `application/x-www-form-urlencoded` bodies, and the new
@@ -88,7 +90,8 @@ First public release.
 - `DynamicEndpoints.FluentValidation`: FluentValidation validators as request- or parameter-level validators.
 - Sample app with an admin panel, Swagger UI and SQLite, plus continuous delivery to NuGet through Trusted Publishing.
 
-[Unreleased]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/releases/tag/v0.1.0
