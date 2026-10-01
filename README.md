@@ -21,6 +21,7 @@
 [How it works](#-how-it-works) •
 [Validation](#%EF%B8%8F-validation-four-layers-zero-recompiles) •
 [Docs](#-documentation) •
+[Changelog](CHANGELOG.md) •
 [Sample app](#-sample-app)
 
 <img src="docs/images/admin-list.jpg" alt="Admin panel with runtime-defined endpoints" width="820">
@@ -392,6 +393,10 @@ creates a GitHub Release with generated notes.
 |---|---|
 | `major.minor` | `<VersionPrefix>` in `Directory.Build.props`. Bump it by hand |
 | `patch` | the last `vX.Y.*` tag + 1. Automatic, gap-free, resets after a prefix bump |
+
+Release notes come from [`CHANGELOG.md`](CHANGELOG.md). Add entries under **[Unreleased]** together with your change, and the
+workflow moves them under the released version. Pushes without entries get auto-generated notes only, and no bot commit.
+After a release with entries, run `git pull` before your next commit (the workflow committed the changelog).
 
 ## 🛠️ Building & testing
 

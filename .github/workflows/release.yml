@@ -3,7 +3,8 @@ name: Release
 # Every push to main publishes a new version to NuGet:
 #   major.minor  – from <VersionPrefix> in Directory.Build.props (bump it by hand for minor/major releases)
 #   patch        – last released v{major}.{minor}.* tag + 1 (starts at 0 after a prefix bump)
-# After a successful publish the commit is tagged and a GitHub Release with generated notes is created.
+# After a successful publish the commit is tagged and a GitHub Release is created. Its notes come from the
+# [Unreleased] section of CHANGELOG.md (plus generated notes), and the section is then moved under the new version.
 # Authentication uses NuGet Trusted Publishing (OIDC) – no long-lived API key is stored in the repository.
 
 on:
@@ -41,6 +42,16 @@ jobs:
           version="$major_minor.$(( ${last:--1} + 1 ))"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Releasing $version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        run: |
+          python3 .github/scripts/changelog.py notes > release-notes.md
+          if [ -s release-notes.md ] && grep -q '[^[:space:]]' release-notes.md; then
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Restore
         run: dotnet restore DynamicEndpoints.slnx
@@ -85,9 +96,21 @@ jobs:
         if: steps.nuget.outputs.enabled == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "v${{ steps.version.outputs.version }}"
-          artifacts/*.nupkg
-          --target "$GITHUB_SHA"
-          --title "v${{ steps.version.outputs.version }}"
-          --generate-notes
+        run: |
+          notes=()
+          if [ "${{ steps.notes.outputs.has_notes }}" = "true" ]; then notes=(--notes-file release-notes.md); fi
+          gh release create "v${{ steps.version.outputs.version }}" artifacts/*.nupkg \
+            --target "$GITHUB_SHA" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes "${notes[@]}"
+
+      # Pushes made with GITHUB_TOKEN do not trigger workflows, so this commit does not start another release.
+      - name: Move [Unreleased] entries under the new version
+        if: steps.nuget.outputs.enabled == 'true' && steps.notes.outputs.has_notes == 'true'
+        run: |
+          python3 .github/scripts/changelog.py release "${{ steps.version.outputs.version }}" "$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Changelog for v${{ steps.version.outputs.version }}"
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -16,6 +16,7 @@
     <PackageProjectUrl>https://github.com/doctorspider42/dotnet-dynamic-endpoints</PackageProjectUrl>
     <RepositoryUrl>https://github.com/doctorspider42/dotnet-dynamic-endpoints</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <PackageTags>aspnetcore;minimal-api;dynamic;endpoints;runtime;routing;json-schema;jsonlogic;openapi;low-code</PackageTags>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
