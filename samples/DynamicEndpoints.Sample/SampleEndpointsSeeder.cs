@@ -112,6 +112,37 @@ public sealed class SampleEndpointsSeeder(IDynamicEndpointManager manager, ILogg
                 .InGroup("Demo")
                 .HandledBy("clock")
                 .FromQuery("timeZone", p => p.String().Default("UTC").Example("Europe/Warsaw")),
+
+            // Built-in "response" processor, with caching (Cache-Control, ETag/304, output cache) and a rate limit of its own.
+            DynamicEndpoint.Get("/products/{sku}")
+                .Named("Get product")
+                .WithDescription("Cached for 60 s (ETag, 304 Not Modified, 30 s on the server) and limited to 5 requests per minute per client – try it a few times.")
+                .InGroup("Built-in processors")
+                .HandledBy("response", new { statusCode = 200, body = new { sku = "{{sku}}", name = "Product {{sku}}", price = 9.99, currency = "EUR" } })
+                .FromRoute("sku", p => p.String().Pattern("^[A-Z0-9-]{3,20}$").Example("ABC-123"))
+                .Cached(TimeSpan.FromSeconds(60), eTag: true, outputCache: TimeSpan.FromSeconds(30))
+                .RateLimited(5, TimeSpan.FromMinutes(1), quota: new DynamicEndpointQuota { Limit = 1000, Period = QuotaPeriod.Day }),
+
+            // Built-in "sql-query" processor (DynamicEndpoints.Sql) on the sample database: the documents of the "collection" processor.
+            DynamicEndpoint.Get("/reports/documents")
+                .Named("Documents report (SQL)")
+                .WithDescription("A read-only, parameterized SQL query – request values are always bound as parameters.")
+                .InGroup("Built-in processors")
+                .HandledBy("sql-query", new
+                {
+                    query = """SELECT "Id" AS id, "Data" AS data, "CreatedAt" AS "createdAt" FROM "Documents" WHERE "Collection" = @collection ORDER BY "CreatedAt" DESC""",
+                    result = "Rows",
+                    maxRows = 50,
+                })
+                .FromQuery("collection", p => p.String().Default("notes").Example("notes")),
+
+            // An endpoint of one tenant: only requests with "X-Tenant: acme" see it. Manage it at /admin/tenants/acme/.
+            DynamicEndpoint.Get("/welcome")
+                .Named("Tenant welcome")
+                .InGroup("Tenants")
+                .HandledBy("response", new { text = "Welcome to Acme, {{name}}!" })
+                .FromQuery("name", p => p.String().MaxLength(50).Default("guest"))
+                .Build() with { Tenant = "acme" },
         ];
 
         var seeded = 0;

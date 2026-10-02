@@ -19,6 +19,8 @@
     <ProjectReference Include="..\..\src\DynamicEndpoints.EntityFrameworkCore\DynamicEndpoints.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.FluentValidation\DynamicEndpoints.FluentValidation.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.Redis\DynamicEndpoints.Redis.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.Sql\DynamicEndpoints.Sql.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.Yaml\DynamicEndpoints.Yaml.csproj" />
     <ProjectReference Include="..\DynamicEndpoints.ServiceDefaults\DynamicEndpoints.ServiceDefaults.csproj" />
     <!-- Package consumers get the analyzers automatically; project references need them wired up explicitly. -->
     <ProjectReference Include="..\..\src\DynamicEndpoints.Analyzers\DynamicEndpoints.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
