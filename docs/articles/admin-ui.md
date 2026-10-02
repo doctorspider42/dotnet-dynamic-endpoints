@@ -41,8 +41,11 @@ Open `/admin/`. Without arguments the panel is at `/admin` and talks to `/_dynam
   ([export, import & GitOps](export-import-gitops.md)).
 - **Import:** upload or paste an export, pick `create`, `upsert` or `sync`. A dry run always comes first and shows what would
   be created, updated, deleted or is invalid (`422`: nothing is written); only then can the import be confirmed.
-- **OpenAPI import:** a wizard for [Import from OpenAPI](openapi-import.md): document, options (processor, route prefix, group,
-  tags, enabled, skip invalid), dry run with the generated definitions and unmapped details, then *Create*.
+- **OpenAPI import:** a wizard for [Import from OpenAPI](openapi-import.md): document, mode (`create`, `upsert`, `sync`),
+  options (processor, route prefix, group, tags, document id, mock, enabled, skip invalid) and – once a dry run read the
+  document's tags – a tag → processor table. The dry run lists per operation what would happen (create, update with the changed
+  properties, unchanged, delete, skip with the reason, invalid), the processor and where it came from, the definition and the
+  unmapped details; *Import* asks for confirmation, naming what will be created, updated and deleted.
 - **Audit log:** per endpoint, and the whole log with filters for endpoint, tenant, user and time ([audit log](audit-log.md)).
 
 <img src="../images/editor.jpg" alt="Endpoint editor" width="820">

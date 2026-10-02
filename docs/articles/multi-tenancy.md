@@ -76,7 +76,7 @@ seeing anybody else's endpoints:
 | History, diffs, rollback | only for the tenant's endpoints (`404` otherwise); a revision that belonged to another tenant can't be rolled back to |
 | Scheduled publishing | `PublishDueAsync()` of a tenant view publishes only that tenant's due drafts; the built-in scheduler publishes every tenant's |
 | [Export & import](export-import-gitops.md) | exports, matches and syncs only the tenant's endpoints: `?mode=sync` deletes the tenant's endpoints that aren't in the file, nobody else's; imported endpoints belong to the tenant |
-| [OpenAPI import](openapi-import.md) | skeletons belong to the tenant; "route already exists" means the tenant already has it |
+| [OpenAPI import](openapi-import.md) | skeletons belong to the tenant; "route already exists" means the tenant already has it; `mode=upsert`/`sync` update and delete only the tenant's own imported endpoints, never shared ones or another tenant's |
 | [Audit log](audit-log.md) | only the tenant's entries |
 | Change sets | `ForTenant("acme").BeginChanges(…)` assigns the tenant to definitions and drafts |
 | [`sql-query`](built-in-processors.md#with-multi-tenancy) | the tenant's endpoints may only use the connections assigned to it (`AllowTenants`); shared endpoints may use all |

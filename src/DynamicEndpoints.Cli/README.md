@@ -33,7 +33,7 @@ Dry run: 1 to create, 1 to update, 1 to delete, 4 unchanged, 0 skipped, 0 invali
 | `export [<id>…]` | the stable export format; `--output <file>`, `--format json\|yaml` (default: by extension) |
 | `push <file>` (`import`) | `--mode create\|upsert\|sync` (default `upsert`), `--sync`, `--dry-run` |
 | `diff <file>` | `push --sync --dry-run`, with exit code 2 when there are differences |
-| `import-openapi <file>` | skeletons from OpenAPI 3.x; `--processor`, `--route-prefix`, `--group`, `--tag`, `--enabled`, `--skip-invalid`, `--dry-run` |
+| `import-openapi <file>` | endpoints from OpenAPI 3.x; `--mode create\|upsert\|sync`, `--processor`, `--processor-by-tag <tag>=<processor>`, `--mock`, `--document-id`, `--options <file>`, `--route-prefix`, `--group`, `--tag`, `--enabled`, `--skip-invalid`, `--dry-run` |
 
 Options: `--url` (`DYNAMIC_ENDPOINTS_URL`), `--api-key` (`DYNAMIC_ENDPOINTS_API_KEY`), `--api-key-header`
 (`DYNAMIC_ENDPOINTS_API_KEY_HEADER`, default `X-Api-Key`), `--token` (`DYNAMIC_ENDPOINTS_TOKEN`), `-H "Name: value"` (repeatable),

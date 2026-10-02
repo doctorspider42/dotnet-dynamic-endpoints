@@ -13,3 +13,4 @@
 | Caching | `Cache-Control` (max age, public/private, no-store), ETags with `304`, server-side output caching ([caching](caching-and-rate-limits.md)) |
 | Tenant | the tenant the endpoint belongs to, or none for shared endpoints ([multi-tenancy](multi-tenancy.md)) |
 | Docs | response schema, request and response examples (documentation only) |
+| Origin | set by importers: where the definition came from (`{ kind: openapi, document, operation }`), so a [re-import](openapi-import.md#re-importing-a-changed-document) finds it; `null` for hand-made endpoints |

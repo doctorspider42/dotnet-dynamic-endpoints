@@ -59,6 +59,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
   and examples, and `requireAuthorization` from `security`. A dry run reports what would be created and, per operation, what
   couldn't be mapped. Imported endpoints are disabled by default, existing routes are skipped, and options set the processor,
   a route prefix, the group and a tag filter.
+- **OpenAPI import: a processor per operation.** `x-dynamic-endpoints-processor` and `x-dynamic-endpoints-processor-config` on an
+  operation, a path item or the document root, and `OpenApiImportOptions.ProcessorsByTag` (`?processorByTag=tag:processor`,
+  `--processor-by-tag tag=processor`). Precedence: operation extension > path extension > tag > document extension >
+  `Processor` > `DefaultProcessor`; every operation in the result reports its `processor`, `processorSource` and `processorReason`.
+  `POST /import/openapi` also accepts `{ "document": …, "options": … }` for configurations, and the CLI `--options <file>`.
+- **OpenAPI import: mock mode.** `Mock = true` (`?mock=true`, `--mock`, a checkbox in the wizard) gives every operation the
+  built-in `response` processor answering with the status code and example of its first 2xx response – or a body generated from
+  its schema like the request snippets do (`allOf` merged, first `oneOf`/`anyOf` alternative); no 2xx: the documented status or
+  `204`. Extensions still win. Without `AddResponseTemplateProcessor()` the import says how to register it.
+- **OpenAPI import: re-import and sync.** `Mode` (`?mode=`, `--mode`, a selector in the wizard): `create` (default, as before),
+  `upsert` updates endpoints imported from the same operation, `sync` also deletes the document's endpoints whose operation is gone.
+  Imported definitions record a new optional `DynamicEndpointDefinition.Origin` (`{ kind: openapi, document, operation }`, stored
+  in the definition JSON – no schema change); matching is by origin, then by method and route within the document. Hand-made
+  endpoints are never updated or deleted. Updates keep the enabled state, tenant, rules, validators, policies, rate limit, caching
+  and – unless the import chose one – the processor. The dry run shows `Create`/`Update` (with the changed properties)/`Unchanged`/
+  `Delete`/`Skip` (with a reason) per operation; validation is all-or-nothing through `IDynamicEndpointTransfer`, and a tenant's
+  admin API only touches the tenant's endpoints. `OpenApiImportOptions.DocumentId` overrides the document id (`info.title`).
 - **Text formats.** `IDynamicEndpointsTextFormat` – JSON built in; the admin API picks it by `Content-Type`, `?format=` or `Accept`.
 - **`DynamicEndpoints.Yaml`**, a new package: `AddYamlFormat()` adds YAML to export, import and the OpenAPI import;
   `DynamicEndpointsYaml.Parse`/`Write` convert between YAML and `JsonNode`.
