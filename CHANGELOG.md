@@ -118,6 +118,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
   The README is now a shorter landing page that links to it.
 - **Benchmarks** in `tests/DynamicEndpoints.Benchmarks` (BenchmarkDotNet): dynamic endpoints vs. equivalent minimal APIs, and the
   cost of a routing table swap with 10, 100 and 1000 endpoints. Results are in the README.
+- **`GET /info` of the admin API** (`DynamicEndpointsAdminInfo`): whether multi-tenancy is on (with the tenant route prefix and
+  header), the tenant of a tenant admin API, whether the store keeps drafts and history, whether a queryable audit log is
+  configured, and the available text formats – so clients (the admin panel) show only what works.
+- **Snippets with tenants.** With multi-tenancy, example requests and snippets fill the tenant into the tenant route prefix and send
+  the header of `FromHeader(…)`. An endpoint of a tenant uses its own; for shared endpoints `?tenant=` picks one (a tenant admin API
+  always uses its tenant). `IDynamicEndpointSnippetGenerator` has `CreateExample`/`Generate` overloads with a tenant.
 
 ### Changed
 

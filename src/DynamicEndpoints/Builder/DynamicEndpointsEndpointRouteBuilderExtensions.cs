@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.AspNetCore.Builder;
 
@@ -59,6 +60,10 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
                     .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList())
             .WithSummary("Lists the tenants that own endpoints.");
 
+        group.MapGet("/info", (HttpContext http, IOptions<DynamicEndpointsOptions> options, IEnumerable<IDynamicEndpointsTextFormat> formats) =>
+                Info(http, options.Value, formats))
+            .WithSummary("What this admin API supports – tenancy, audit log, drafts and history, export formats.");
+
         group.MapGet("/processors", (IDynamicEndpointManager manager) => manager.Processors)
             .WithSummary("Lists processors that can handle dynamic endpoints.");
 
@@ -108,8 +113,8 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
                 manager.ValidateAsync(definition, ct))
             .WithSummary("Validates a definition without saving it.");
 
-        group.MapGet("/{id:guid}/snippets", async Task<IResult> (Guid id, string? baseUrl, HttpContext context, IDynamicEndpointManager manager,
-                IDynamicEndpointSnippetGenerator snippets, CancellationToken ct) =>
+        group.MapGet("/{id:guid}/snippets", async Task<IResult> (Guid id, string? baseUrl, string? tenant, HttpContext context,
+                IDynamicEndpointManager manager, IDynamicEndpointSnippetGenerator snippets, CancellationToken ct) =>
             {
                 if (ResolveBaseUrl(context, baseUrl) is not { } url)
                 {
@@ -117,15 +122,18 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
                 }
 
                 return await manager.GetAsync(id, ct) is { } state
-                    ? TypedResults.Ok(snippets.Generate(state.Definition, url))
+                    ? TypedResults.Ok(snippets.Generate(state.Definition, url, SnippetTenant(context, tenant)))
                     : TypedResults.NotFound();
             })
-            .WithSummary("Generates an example request and curl, HTTPie and C# snippets for an endpoint.")
+            .WithSummary("Generates an example request and curl, HTTPie and C# snippets for an endpoint (?tenant= for a shared endpoint with multi-tenancy).")
             .Produces<DynamicEndpointSnippets>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        group.MapPost("/snippets", (DynamicEndpointDefinition definition, string? baseUrl, HttpContext context, IDynamicEndpointSnippetGenerator snippets) =>
-                ResolveBaseUrl(context, baseUrl) is { } url ? TypedResults.Ok(snippets.Generate(definition, url)) : BadBaseUrl())
+        group.MapPost("/snippets", (DynamicEndpointDefinition definition, string? baseUrl, string? tenant, HttpContext context,
+                IDynamicEndpointSnippetGenerator snippets) =>
+                ResolveBaseUrl(context, baseUrl) is { } url
+                    ? TypedResults.Ok(snippets.Generate(definition, url, SnippetTenant(context, tenant)))
+                    : BadBaseUrl())
             .WithSummary("Generates an example request and snippets for an unsaved definition (editor preview).")
             .Produces<DynamicEndpointSnippets>();
 
@@ -390,6 +398,29 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
 
     // Tenant of a tenant admin API request, for handlers that don't go through the manager.
     internal const string AdminTenantKey = "DynamicEndpoints.AdminTenant";
+
+    // A tenant's admin API always shows requests of its tenant; otherwise ?tenant=, else the definition's own tenant.
+    private static string? SnippetTenant(HttpContext http, string? tenant) =>
+        http.Items.TryGetValue(AdminTenantKey, out var scoped) && scoped is string own ? own
+        : string.IsNullOrWhiteSpace(tenant) ? null
+        : tenant;
+
+    private static DynamicEndpointsAdminInfo Info(HttpContext http, DynamicEndpointsOptions options, IEnumerable<IDynamicEndpointsTextFormat> formats)
+    {
+        var services = http.RequestServices;
+        var tenancy = options.Tenancy;
+        return new DynamicEndpointsAdminInfo
+        {
+            Tenancy = tenancy.Enabled
+                ? new DynamicEndpointsAdminTenancyInfo(tenancy.RoutePrefix, tenancy.RouteParameter,
+                    services.GetServices<IDynamicEndpointTenantResolver>().OfType<HeaderTenantResolver>().FirstOrDefault()?.HeaderName)
+                : null,
+            Tenant = http.Items.TryGetValue(AdminTenantKey, out var tenant) ? tenant as string : null,
+            Revisions = services.GetService<IDynamicEndpointStore>() is IDynamicEndpointRevisionStore,
+            AuditLog = services.GetService<IDynamicEndpointAuditLog>() is not null,
+            Formats = formats.Select(f => f.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+        };
+    }
 
     private static async Task<IReadOnlyList<DynamicEndpointState>> ListAsync(IDynamicEndpointManager manager, string? tenant, CancellationToken ct) =>
         tenant is null ? await manager.ListAsync(ct)
