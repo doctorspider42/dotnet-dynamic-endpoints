@@ -33,6 +33,12 @@ internal sealed class CompiledEndpoint
 
     public required JsonObject Configuration { get; init; }
 
+    /// <summary><c>Cache-Control</c> of successful responses (see <see cref="DynamicEndpointDefinition.Caching"/>).</summary>
+    public string? CacheControl { get; init; }
+
+    /// <summary>Request headers listed in the <c>Vary</c> header of successful, cacheable responses.</summary>
+    public string[] VaryHeaders { get; init; } = [];
+
     public bool HasBody => Parameters.Any(p => p.Definition.Source == ParameterSource.Body);
 
     public bool HasForm => Parameters.Any(p => p.Definition.Source == ParameterSource.Form);

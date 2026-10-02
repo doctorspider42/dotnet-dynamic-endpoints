@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using DynamicEndpoints.Runtime;
 using Microsoft.Extensions.Options;
@@ -215,11 +216,42 @@ internal sealed class DynamicOpenApiDocumentProvider(
             success["content"] = new JsonObject { ["application/json"] = WithExample(media, d.ResponseExample?.DeepClone()) };
         }
 
+        var caching = d.Caching;
+        var successHeaders = new JsonObject();
+        if (endpoint.CacheControl is { } cacheControl)
+        {
+            successHeaders["Cache-Control"] = Header("Caching directives of the response.", cacheControl);
+        }
+
+        if (caching is { ETag: true })
+        {
+            successHeaders["ETag"] = Header("Version of the response – send it back in If-None-Match to get 304 Not Modified when it is unchanged.", null);
+            parameters.Add(new JsonObject
+            {
+                ["name"] = "If-None-Match",
+                ["in"] = "header",
+                ["required"] = false,
+                ["description"] = "ETag of a cached response; answered with 304 Not Modified when it is still current.",
+                ["schema"] = new JsonObject { ["type"] = "string" },
+            });
+            operation["parameters"] ??= parameters;
+        }
+
+        if (successHeaders.Count > 0)
+        {
+            success["headers"] = successHeaders;
+        }
+
         var responses = new JsonObject
         {
             ["200"] = success,
-            ["400"] = ProblemResponse("Validation failed", ValidationProblemRef),
         };
+        if (caching is { ETag: true })
+        {
+            responses["304"] = new JsonObject { ["description"] = "Not modified – the cached response (If-None-Match) is still current." };
+        }
+
+        responses["400"] = ProblemResponse("Validation failed", ValidationProblemRef);
         if (bodyParameters.Count > 0 || formParameters.Count > 0)
         {
             responses["413"] = ProblemResponse("Payload too large", ProblemRef);
@@ -250,13 +282,38 @@ internal sealed class DynamicOpenApiDocumentProvider(
             operation["security"] = new JsonArray();
         }
 
+        if (d.RateLimit is not null)
+        {
+            var tooMany = ProblemResponse("Too many requests – rate limit or quota exceeded", ProblemRef);
+            tooMany["headers"] = new JsonObject
+            {
+                ["Retry-After"] = new JsonObject
+                {
+                    ["description"] = "Seconds to wait before retrying.",
+                    ["schema"] = new JsonObject { ["type"] = "integer" },
+                },
+            };
+            responses["429"] = tooMany;
+        }
+
         operation["responses"] = responses;
-        operation["x-dynamic-endpoint"] = new JsonObject
+        var extension = new JsonObject
         {
             ["id"] = d.Id.ToString(),
             ["revision"] = d.Revision,
             ["processor"] = endpoint.ProcessorName,
         };
+        if (d.RateLimit is not null)
+        {
+            extension["rateLimit"] = JsonSerializer.SerializeToNode(d.RateLimit, DynamicEndpointsJson.SerializerOptions);
+        }
+
+        if (caching is not null)
+        {
+            extension["caching"] = JsonSerializer.SerializeToNode(caching, DynamicEndpointsJson.SerializerOptions);
+        }
+
+        operation["x-dynamic-endpoint"] = extension;
         openApi.ConfigureOperation?.Invoke(operation, d);
         return operation;
     }
@@ -318,6 +375,35 @@ internal sealed class DynamicOpenApiDocumentProvider(
             builder.Append(builder.Length > 0 ? "\n\n" : string.Empty).Append($"Requires authorization policy `{d.AuthorizationPolicy}`.");
         }
 
+        if (d.RateLimit is { } rateLimit)
+        {
+            builder.Append(builder.Length > 0 ? "\n\n" : string.Empty).Append("**Rate limit:** ").Append(RateLimiting.Describe(rateLimit)).Append('.');
+        }
+
+        if (d.Caching is { NoStore: false } caching)
+        {
+            var parts = new List<string>();
+            if (caching.MaxAgeSeconds is { } maxAge)
+            {
+                parts.Add($"clients may reuse responses for {maxAge} s");
+            }
+
+            if (caching.ETag)
+            {
+                parts.Add("ETags with 304 Not Modified");
+            }
+
+            if (caching.UsesOutputCache)
+            {
+                parts.Add(caching.OutputCacheSeconds is { } seconds ? $"cached on the server for {seconds} s" : "cached on the server");
+            }
+
+            if (parts.Count > 0)
+            {
+                builder.Append(builder.Length > 0 ? "\n\n" : string.Empty).Append("**Caching:** ").Append(string.Join(", ", parts)).Append('.');
+            }
+        }
+
         return builder.ToString();
     }
 
@@ -347,6 +433,17 @@ internal sealed class DynamicOpenApiDocumentProvider(
         }
 
         return candidate;
+    }
+
+    private static JsonObject Header(string description, string? example)
+    {
+        var header = new JsonObject { ["description"] = description, ["schema"] = new JsonObject { ["type"] = "string" } };
+        if (example is not null)
+        {
+            header["example"] = example;
+        }
+
+        return header;
     }
 
     private static JsonObject ProblemResponse(string description, string schemaRef) => new()

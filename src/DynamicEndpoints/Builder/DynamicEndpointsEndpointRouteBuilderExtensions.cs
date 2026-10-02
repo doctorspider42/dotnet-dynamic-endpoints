@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DynamicEndpoints;
 using DynamicEndpoints.Runtime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -96,6 +98,103 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
         group.MapPost("/validate", (DynamicEndpointDefinition definition, IDynamicEndpointManager manager, CancellationToken ct) =>
                 manager.ValidateAsync(definition, ct))
             .WithSummary("Validates a definition without saving it.");
+
+        group.MapGet("/{id:guid}/snippets", async Task<IResult> (Guid id, string? baseUrl, HttpContext context, IDynamicEndpointManager manager,
+                IDynamicEndpointSnippetGenerator snippets, CancellationToken ct) =>
+            {
+                if (ResolveBaseUrl(context, baseUrl) is not { } url)
+                {
+                    return BadBaseUrl();
+                }
+
+                return await manager.GetAsync(id, ct) is { } state
+                    ? TypedResults.Ok(snippets.Generate(state.Definition, url))
+                    : TypedResults.NotFound();
+            })
+            .WithSummary("Generates an example request and curl, HTTPie and C# snippets for an endpoint.")
+            .Produces<DynamicEndpointSnippets>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/snippets", (DynamicEndpointDefinition definition, string? baseUrl, HttpContext context, IDynamicEndpointSnippetGenerator snippets) =>
+                ResolveBaseUrl(context, baseUrl) is { } url ? TypedResults.Ok(snippets.Generate(definition, url)) : BadBaseUrl())
+            .WithSummary("Generates an example request and snippets for an unsaved definition (editor preview).")
+            .Produces<DynamicEndpointSnippets>();
+
+        group.MapGet("/export", async (HttpContext context, Guid[]? id, string? format, IDynamicEndpointTransfer transfer,
+                IEnumerable<IDynamicEndpointsTextFormat> formats, CancellationToken ct) =>
+            {
+                if (DynamicEndpointsTextFormats.ForResponse(formats, format, context.Request.Headers.Accept) is not { } writer)
+                {
+                    return UnknownFormat(formats);
+                }
+
+                var export = await transfer.ExportAsync(id, ct);
+                return Results.Text(writer.Write(export.ToJsonNode()), writer.MediaTypes[0]);
+            })
+            .WithSummary("Exports all definitions, or those given with ?id=, in the stable export format (?format=json|yaml).")
+            .Produces<DynamicEndpointExport>(contentType: "application/json");
+
+        group.MapPost("/import", async Task<IResult> (HttpContext context, string? mode, bool? dryRun, IDynamicEndpointTransfer transfer,
+                IEnumerable<IDynamicEndpointsTextFormat> formats, CancellationToken ct) =>
+            {
+                if (!TryParseMode(mode, out var importMode))
+                {
+                    return TypedResults.Problem($"Unknown mode '{mode}'. Use create, upsert or sync.", statusCode: StatusCodes.Status400BadRequest);
+                }
+
+                DynamicEndpointExport import;
+                try
+                {
+                    var text = await ReadBodyAsync(context, ct);
+                    import = DynamicEndpointExport.FromJsonNode(DynamicEndpointsTextFormats.ForContentType(formats, context.Request.ContentType).Parse(text));
+                }
+                catch (FormatException ex)
+                {
+                    return TypedResults.Problem(ex.Message, title: "The import could not be read.", statusCode: StatusCodes.Status400BadRequest);
+                }
+
+                var result = await transfer.ImportAsync(import, new DynamicEndpointImportOptions { Mode = importMode, DryRun = dryRun ?? false }, ct);
+                return TypedResults.Json(result, statusCode: result.Succeeded ? StatusCodes.Status200OK : StatusCodes.Status422UnprocessableEntity);
+            })
+            .WithSummary("Imports exported definitions (?mode=create|upsert|sync, ?dryRun=true). 422 when any endpoint is invalid – nothing is written then.")
+            .Accepts<DynamicEndpointExport>("application/json", "application/yaml")
+            .Produces<DynamicEndpointImportResult>()
+            .Produces<DynamicEndpointImportResult>(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/import/openapi", async Task<IResult> (HttpContext context, bool? dryRun, string? processor, string? routePrefix,
+                string? group, [FromQuery] string[]? tag, bool? enabled, bool? skipInvalid, IDynamicEndpointOpenApiImporter importer,
+                IEnumerable<IDynamicEndpointsTextFormat> formats, CancellationToken ct) =>
+            {
+                OpenApiImportResult result;
+                try
+                {
+                    var text = await ReadBodyAsync(context, ct);
+                    var document = DynamicEndpointsTextFormats.ForContentType(formats, context.Request.ContentType).Parse(text)
+                        ?? throw new FormatException("The document is empty.");
+                    result = await importer.ImportAsync(document, new OpenApiImportOptions
+                    {
+                        DryRun = dryRun ?? false,
+                        Processor = processor,
+                        RoutePrefix = routePrefix,
+                        Group = group,
+                        Tags = tag is { Length: > 0 } ? tag : null,
+                        Enabled = enabled ?? false,
+                        SkipInvalid = skipInvalid ?? false,
+                    }, ct);
+                }
+                catch (FormatException ex)
+                {
+                    return TypedResults.Problem(ex.Message, title: "The OpenAPI document could not be read.", statusCode: StatusCodes.Status400BadRequest);
+                }
+
+                return TypedResults.Json(result, statusCode: result.Succeeded ? StatusCodes.Status200OK : StatusCodes.Status422UnprocessableEntity);
+            })
+            .WithSummary("Creates endpoint skeletons from an OpenAPI 3.x document (JSON, or YAML with DynamicEndpoints.Yaml). ?dryRun=true reports what would be created and what couldn't be mapped.")
+            .Accepts<JsonObject>("application/json", "application/yaml")
+            .Produces<OpenApiImportResult>()
+            .Produces<OpenApiImportResult>(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapPost("/reload", async (IDynamicEndpointManager manager, CancellationToken ct) =>
             {
@@ -193,6 +292,35 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
         endpoints.MapGet(pattern, (IDynamicOpenApiDocumentProvider provider) =>
                 Results.Text(provider.GetDocument().ToJsonString(IndentedJson), "application/json"))
             .ExcludeFromDescription();
+
+    // The application's own address by default; an explicit base URL must be absolute http(s).
+    private static string? ResolveBaseUrl(HttpContext context, string? baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}";
+        }
+
+        return Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? baseUrl.TrimEnd('/') : null;
+    }
+
+    private static bool TryParseMode(string? mode, out DynamicEndpointImportMode result)
+    {
+        result = DynamicEndpointImportMode.Upsert;
+        return string.IsNullOrWhiteSpace(mode) || (Enum.TryParse(mode, ignoreCase: true, out result) && Enum.IsDefined(result));
+    }
+
+    private static async Task<string> ReadBodyAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        return await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    private static IResult UnknownFormat(IEnumerable<IDynamicEndpointsTextFormat> formats) =>
+        TypedResults.Problem($"Unknown format. Available: {string.Join(", ", formats.Select(f => f.Name))}.", statusCode: StatusCodes.Status400BadRequest);
+
+    private static IResult BadBaseUrl() =>
+        TypedResults.Problem("'baseUrl' must be an absolute http or https URL.", statusCode: StatusCodes.Status400BadRequest);
 
     private static async Task<IResult> Guard(Func<Task<IResult>> action)
     {

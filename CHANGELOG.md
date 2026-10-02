@@ -39,6 +39,50 @@ and the project uses [Semantic Versioning](https://semver.org/).
   The sample picks PostgreSQL and Redis up from the `dynamicendpoints` and `redis` connection strings.
 - **Container for a live demo.** `samples/DynamicEndpoints.Sample/Dockerfile` and `samples/docker-compose.yml` (two instances,
   PostgreSQL, Redis, nginx). A demo mode (`Demo__Enabled`) adds a rate limit per client and resets the endpoints every hour.
+- **Request snippets.** `GET /{id}/snippets` of the admin API (and `POST /snippets` for an unsaved definition) returns an example
+  request built from parameter examples, defaults, allowed values and constraints, plus ready-made curl, HTTPie and C# `HttpClient`
+  snippets. Required documented headers and the credentials of the security schemes appear as placeholders. In code:
+  `IDynamicEndpointSnippetGenerator`.
+- **Export and import of definitions.** `IDynamicEndpointTransfer` and the admin API's `GET /export` (all, or `?id=…`) write a stable,
+  diff-friendly format (`dynamic-endpoints/v1`: sorted, no revisions or timestamps, `\n` line endings). `POST /import` reads it with
+  `?mode=create|upsert|sync` (`sync` also deletes what is missing) and `?dryRun=true`, which reports per endpoint what would be
+  created, updated (with the changed properties), deleted, left unchanged or skipped. Endpoints are matched by id, or by method and
+  route when the file has none. The whole import is validated first, including route conflicts within the file; when anything is
+  invalid nothing is written and the response is `422`.
+- **`DynamicEndpoints.Cli`**, a new .NET tool (`dynamic-endpoints`) for GitOps through the admin API: `list`, `export` (JSON or
+  YAML by file extension), `push`/`import` (`--mode create|upsert|sync`, `--sync`, `--dry-run`), `diff` and `import-openapi`.
+  Credentials via `--api-key`/`--api-key-header`, `--token`, `-H` or `DYNAMIC_ENDPOINTS_*` environment variables; exit codes
+  0 (success), 1 (rejected, nothing written), 2 (`diff` found differences), 3 (usage), 4 (connection/HTTP error); `--json` output.
+- **Import from OpenAPI.** `IDynamicEndpointOpenApiImporter` and `POST /import/openapi` turn an OpenAPI 3.x document (JSON, or
+  YAML with `DynamicEndpoints.Yaml`) into endpoint skeletons: routes and methods, path/query/header parameters with types, formats
+  and constraints, JSON and form body properties (`allOf` merged, `$ref`s resolved, files with content types), response schemas
+  and examples, and `requireAuthorization` from `security`. A dry run reports what would be created and, per operation, what
+  couldn't be mapped. Imported endpoints are disabled by default, existing routes are skipped, and options set the processor,
+  a route prefix, the group and a tag filter.
+- **Text formats.** `IDynamicEndpointsTextFormat` – JSON built in; the admin API picks it by `Content-Type`, `?format=` or `Accept`.
+- **`DynamicEndpoints.Yaml`**, a new package: `AddYamlFormat()` adds YAML to export, import and the OpenAPI import;
+  `DynamicEndpointsYaml.Parse`/`Write` convert between YAML and `JsonNode`.
+- **Built-in processors** (opt-in, typed configuration validated on save): `AddBuiltInProcessors()` or one by one:
+  - `http-forward` (`AddHttpForwardProcessor()`): forwards to another service through `IHttpClientFactory` with a URL template
+    (values URL-encoded, no placeholders in the host), headers with `{config:…}` secrets, forwarded request headers, body modes or a
+    body template, timeout, and the upstream response relayed or mapped by a `responseTemplate`. `502`/`504` on upstream failures.
+  - `webhook` (`AddWebhookProcessor()`): JSON webhooks with retries and exponential back-off (`Retry-After` honoured), HMAC-SHA256
+    signatures from a configuration secret, a stable `X-Webhook-Delivery` id, and optional background delivery.
+  - `response` (`AddResponseTemplateProcessor()`): responses rendered from JSON or text templates (`{{name}}`, `{{a.b[0]}}`).
+  - `DynamicHttpProcessorOptions`: named HTTP client, `AllowedHosts` against SSRF (checked on save and per call), response size limit.
+- **`DynamicEndpoints.Sql`**, a new package: `AddSqlQueryProcessor(…)` registers `sql-query`, a read-only SQL processor for any
+  ADO.NET provider. Request values are always bound as parameters; single `SELECT`/`WITH` statements only, data-changing keywords
+  rejected on save and before every run, every query in a rolled-back transaction. See the package README for the security notes.
+- **Response caching per endpoint.** `Caching` in the definition (`.Cached(…)` / `.WithCaching(…)`): `Cache-Control` max age and
+  visibility (private by default for endpoints that require authorization), `noStore`, ETags with `304 Not Modified`, and
+  server-side output caching through ASP.NET Core `OutputCache` (`outputCacheSeconds`, `outputCachePolicy`, `varyByQuery`,
+  `varyByHeader`; header parameters are always part of the key). Cached entries are evicted on every instance when the definition
+  changes. Documented in OpenAPI (`Cache-Control`/`ETag` headers, `If-None-Match`, `304`).
+- **Rate limits and quotas in the definition.** `RateLimit` (`.RateLimited(…)` / `.WithRateLimit(…)`): fixed window, sliding window,
+  token bucket or concurrency limits, partitioned by IP address, user, a header such as an API key, or per endpoint, with an
+  optional long-term quota (hour/day/week/month). Built on ASP.NET Core rate limiting (`AddRateLimiter()` + `UseRateLimiter()`);
+  counters start over when the limit settings change and survive reloads. Rejections are `429` with `Retry-After`, formatted by
+  `IDynamicErrorResponseFactory` (new `DynamicErrorKind.TooManyRequests`, also used for empty 429 responses), and documented in OpenAPI.
 
 ### Changed
 

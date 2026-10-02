@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>DynamicEndpoints.Sql</PackageId>
+    <Description>Read-only, parameterized SQL query processor for DynamicEndpoints – works with any ADO.NET provider. No third-party dependencies.</Description>
+    <PackageTags>$(PackageTags);sql;ado.net</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DynamicEndpoints\DynamicEndpoints.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicEndpoints.Tests" />
+  </ItemGroup>
+
+</Project>

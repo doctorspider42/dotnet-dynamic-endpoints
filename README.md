@@ -62,6 +62,10 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 📧 **Built-in formats** | E-mail, URI, phone (E.164), IPv4/IPv6, time, date, date-time, UUID. No code needed. |
 | 🪶 **Zero dependencies** | The core depends on ASP.NET Core only. The JSON Schema subset and the JsonLogic engine are built in. |
 | ⚙️ **Processors** | Your code, your DI, your database. Validated input goes to a regular, statically typed handler. |
+| 🔋 **Batteries included** | Opt-in HTTP forward, webhook (retries, HMAC), response templates and read-only SQL processors. |
+| ⏱️ **Caching & rate limits** | `Cache-Control`, ETags/304, output caching, rate limits and quotas – set per endpoint, in the definition. |
+| 🔁 **GitOps** | Stable export, import with upsert/sync and dry-run diffs, the `dynamic-endpoints` CLI for CI, import from OpenAPI. |
+| ✂️ **Snippets** | Example requests and curl, HTTPie and C# snippets for every endpoint. |
 | 📜 **OpenAPI 3.1 + Swagger UI** | Generated from the definitions and always current. Business rules show up in the docs. |
 | 🔐 **First-class citizens** | Authorization policies, rate limiting, CORS and endpoint conventions behave the same as on hand-written endpoints. |
 | 🚦 **Safe by design** | No code execution, ReDoS-proof regexes, body and depth limits, reserved prefixes, conflict detection. |
@@ -266,7 +270,8 @@ builder.Services.AddDynamicEndpoints().AddFluentValidatorsFromAssemblyContaining
 | Rules | [JsonLogic](https://jsonlogic.com) conditions with an error message, an optional error code and a target parameter |
 | Custom validators | code validators attached to parameters or to the whole request, with optional configuration |
 | Processing | processor name and configuration (JSON) |
-| Security | allow anonymous, require authorization, authorization policy, rate limiting policy |
+| Security | allow anonymous, require authorization, authorization policy, rate limiting policy, or a rate limit and quota of its own |
+| Caching | `Cache-Control` (max age, public/private, no-store), ETags with `304`, server-side output caching |
 | Docs | response schema, request and response examples (documentation only) |
 </details>
 
@@ -369,8 +374,75 @@ await changes.ApplyAsync(ct);                                       // routing t
 | `GET` | `/{id}/revisions` · `/{id}/revisions/{revision}` | history |
 | `GET` | `/{id}/diff?from=3&to=5` | differences between revisions (`to` defaults to the published one) |
 | `POST` | `/{id}/revisions/{revision}/rollback` | roll back |
+| `GET` | `/{id}/snippets?baseUrl=` | example request + curl, HTTPie and C# snippets |
+| `POST` | `/snippets?baseUrl=` | the same for an unsaved definition (editor preview) |
+| `GET` | `/export?id=…&format=json\|yaml` | definitions in the stable export format |
+| `POST` | `/import?mode=create\|upsert\|sync&dryRun=true` | import an export; the dry run is the diff |
+| `POST` | `/import/openapi?processor=&routePrefix=&group=&tag=&enabled=&skipInvalid=&dryRun=` | skeletons from an OpenAPI 3.x document |
 
 It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
+
+**Snippets.** The example request is built from parameter examples, then defaults, allowed values and finally values that satisfy
+the constraints (`Range(5, 100)` → `5`, `Email()` → `user@example.com`, `MinLength(8)` → `stringxx`, custom object schemas
+property by property). Optional parameters with a default and no example are left out. Documented required headers
+(`o.OpenApi.AddHeader(…, required: true)`) and credentials of the security schemes show up as placeholders (`<api-key>`,
+`Bearer <token>`). `baseUrl` defaults to the address the admin API was called on. In code: `IDynamicEndpointSnippetGenerator`.
+</details>
+
+<details>
+<summary><b>Export, import &amp; GitOps</b></summary>
+
+Keep the definitions in Git, review changes in pull requests and push them from CI:
+
+```bash
+dotnet tool install --global DynamicEndpoints.Cli
+
+dynamic-endpoints export -o endpoints.yaml --url https://api.example.com/api/admin/endpoints --api-key "$ADMIN_KEY"
+dynamic-endpoints diff endpoints.yaml        # exit code 2 when the server differs from the file
+dynamic-endpoints push endpoints.yaml --sync # create, update and delete until the server matches the file
+```
+
+- **Stable format** (`dynamic-endpoints/v1`): sorted by route, method and id, without revisions and timestamps, indented with `\n`
+  line endings. JSON is built in; YAML needs `DynamicEndpoints.Yaml` and `.AddYamlFormat()`.
+- **Modes:** `create` (only new endpoints), `upsert` (default: create and replace) and `sync` (also delete what isn't in the file).
+- **Matching:** by `id`; definitions without one are matched by method and route, so hand-written files work too.
+- **All or nothing:** the whole import is validated first – including route conflicts among the imported endpoints – and nothing
+  is written when any endpoint is invalid (`422`). The dry run (`?dryRun=true`, `diff`) reports per endpoint `Create`, `Update`
+  (with the changed properties), `Delete`, `Unchanged`, `Skip` or `Invalid`.
+- **In code:** `IDynamicEndpointTransfer.ExportAsync(…)` / `ImportAsync(export, new() { Mode = DynamicEndpointImportMode.Sync, DryRun = true })`.
+  Writes go through the registered store one by one; the routing table is updated once at the end.
+</details>
+
+<details>
+<summary><b>Import from OpenAPI</b></summary>
+
+Got a contract first? Turn an OpenAPI 3.x document into endpoint skeletons:
+
+```bash
+curl -X POST "https://api.example.com/api/admin/endpoints/import/openapi?processor=http-forward&routePrefix=/partners&dryRun=true" \
+  -H "Content-Type: application/json" --data-binary @partner-api.json      # YAML with DynamicEndpoints.Yaml
+```
+
+```csharp
+var result = await importer.ImportAsync(document, new OpenApiImportOptions { Processor = "orders", DryRun = true });   // IDynamicEndpointOpenApiImporter
+```
+
+| OpenAPI | Definition |
+|---|---|
+| paths, methods (GET, POST, PUT, PATCH, DELETE), `summary`/`operationId`, `description`, first tag | method, route, name, description, group |
+| path, query and header parameters (path-level ones too) | `Route`, `Query`, `Header` parameters; names like `X-Request-Id` become `xRequestId` bound from the header |
+| `type`, `format` (date, date-time, uuid, email, uri, ipv4, ipv6, time, binary), `enum`, `default`, `example(s)`, `required` | type, format, allowed values, default, example, required |
+| `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, exclusive bounds, `minItems`, `maxItems`, array `items` | constraints, item type |
+| JSON request body properties (`allOf` merged, `$ref`s resolved) | `Body` parameters; nested objects keep their (sanitized) schema |
+| `multipart/form-data` / urlencoded properties, `format: binary`, `encoding.contentType` | `Form` parameters, `File`s with allowed content types |
+| first 2xx JSON response: schema and example | response schema (references inlined) and example |
+| `security` | `requireAuthorization` (empty `security: []` → `allowAnonymous`) |
+
+- **Reported, not guessed:** cookie parameters, `oneOf`/`anyOf`, `multipleOf`, `uniqueItems`, unknown formats, patterns inside
+  object schemas, callbacks, HEAD/OPTIONS/TRACE, non-JSON bodies and the like are listed per operation under `unmapped`.
+- **Safe by default:** imported endpoints are **disabled** (`enabled=true` to change that) until somebody reviewed them, and get
+  the given `processor` (or `DefaultProcessor`). Operations whose method and route already exist are skipped, so re-importing is safe.
+- Every skeleton is validated like any definition. When one is invalid nothing is created (`422`), unless `skipInvalid=true`.
 </details>
 
 <details>
@@ -412,6 +484,46 @@ builder.Services.AddDynamicEndpoints()
 - **Names:** come from `[DynamicProcessor("…")]` / `[DynamicValidator("…")]` or the type name (`OrderLookupProcessor` → `order-lookup`).
 - **Idempotent scanning:** a type that is already registered is skipped.
 - **Single entry point:** register one processor and set `options.DefaultProcessor`.
+</details>
+
+<details>
+<summary><b>Built-in processors: HTTP forward, webhook, response template, SQL</b></summary>
+
+Batteries included, but opt-in: nothing is registered until you ask for it. Their configuration is typed and validated on save
+(unknown properties are errors).
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .AddBuiltInProcessors(o => o.AllowedHosts.Add("*.internal.example.com"))   // http-forward, webhook, response
+    .AddSqlQueryProcessor(_ => new NpgsqlConnection(readOnlyConnectionString));  // DynamicEndpoints.Sql package
+
+builder.Services.AddHttpClient("DynamicEndpoints").AddStandardResilienceHandler();  // optional: the processors' named client
+```
+
+| Processor | Configuration (excerpt) | |
+|---|---|---|
+| `http-forward` | `url` (`https://backend/orders/{id}`), `method`, `headers`, `forwardHeaders`, `body`, `bodyTemplate`, `timeoutSeconds`, `responseTemplate`, `statusCode` | proxies to another service through `IHttpClientFactory` and relays (or maps) its response |
+| `webhook` | `url`, `payload`, `retries`, `retryDelayMilliseconds`, `timeoutSeconds`, `signingSecretConfigurationKey`, `background` | JSON webhook with exponential back-off, HMAC-SHA256 signature and an `X-Webhook-Delivery` id |
+| `response` | `body` (JSON template) or `text`, `statusCode`, `contentType`, `headers` | mock APIs, fixed answers, request-to-response mapping |
+| `sql-query` | `query` with `@name` placeholders, `result` (`Rows`/`Row`/`Value`), `maxRows`, `connection` | read-only SQL, see [DynamicEndpoints.Sql](src/DynamicEndpoints.Sql/README.md) |
+
+```json
+{ "processor": "http-forward", "processorConfig": {
+    "url": "https://crm.internal.example.com/customers/{id}",
+    "headers": { "X-Api-Key": "{config:Crm:ApiKey}" },
+    "responseTemplate": { "id": "{{id}}", "name": "{{response.data.fullName}}" } } }
+```
+
+- **Templates:** URLs use `{name}` and every value is URL-encoded, so a parameter can't add path segments or change the host
+  (placeholders in scheme, host and port are rejected). JSON and text templates use `{{name}}`, `{{address.city}}`,
+  `{{response.items[0]}}`; a string that is only a placeholder keeps the JSON type. Values are inserted, never evaluated.
+- **Secrets** stay out of definitions: header values reference configuration with `{config:Section:Key}` (checked on save), the
+  webhook secret is a configuration key.
+- **SSRF:** admins choose the targets. Restrict them with `AllowedHosts` when admins aren't fully trusted. It's checked on save and
+  on every call.
+- **Upstream failures:** timeouts are `504`, connection errors `502`, responses above `MaxResponseBodySize` (10 MB) `502`. Webhooks
+  retry network errors, timeouts, `408`, `429` and `5xx` (honouring `Retry-After`), and answer `502` once they give up. With
+  `background: true` they answer `202` right away and deliver from an in-memory queue (lost on shutdown).
 </details>
 
 <details>
@@ -517,6 +629,62 @@ app.UseDynamicEndpointsErrorResponses(o => o.AppliesTo = c => c.Request.Path.Sta
   `UseExceptionHandler` handle them instead, set `o.HandleExceptions = false`.
 - Titles are localized like the validation messages. `e.Endpoint` is the dynamic endpoint (`null` for unknown routes).
 - `IDynamicEndpointFilter.OnValidationFailedAsync` still runs afterwards and can replace the result of a single request.
+</details>
+
+<details>
+<summary><b>Response caching: <code>Cache-Control</code>, ETags, output caching</b></summary>
+
+```csharp
+DynamicEndpoint.Get("/prices/{sku}")
+    .Cached(TimeSpan.FromMinutes(1), eTag: true, outputCache: TimeSpan.FromSeconds(30))
+    // or .WithCaching(new DynamicEndpointCaching { MaxAgeSeconds = 60, ETag = true, OutputCacheSeconds = 30, VaryByHeader = ["Accept-Language"] })
+```
+
+```json
+"caching": { "maxAgeSeconds": 60, "eTag": true, "outputCacheSeconds": 30 }
+```
+
+- **`Cache-Control`:** `maxAgeSeconds` and `visibility` (`Public`, or `Private` by default for endpoints that require authorization;
+  those can't be public). `noStore: true` forbids caching, also for non-GET endpoints.
+- **ETags:** computed from the response body. A matching `If-None-Match` gets `304 Not Modified` without a body. Without a max age
+  clients are told to revalidate every time (`no-cache`).
+- **Output caching** (`outputCacheSeconds`, `outputCachePolicy`): ASP.NET Core output caching, so the application needs
+  `services.AddOutputCache()` and `app.UseOutputCache()` (checked on save). The cache key contains the path, the query string
+  (or `varyByQuery`) and the endpoint's header parameters (plus `varyByHeader`). Entries are evicted on every instance when the
+  definition changes. Requests with `Authorization` or cookies are not cached (the framework's default policy).
+- Headers are only added to successful responses. Caching is limited to GET endpoints and documented in OpenAPI
+  (`Cache-Control`/`ETag` headers, `If-None-Match`, `304`).
+</details>
+
+<details>
+<summary><b>Rate limits and quotas in the definition</b></summary>
+
+No named policy needed: the limit lives in the endpoint and is enforced by ASP.NET Core rate limiting.
+
+```csharp
+builder.Services.AddRateLimiter(_ => { });   // once
+app.UseRateLimiter();                        // after UseRouting, when you call it yourself
+
+DynamicEndpoint.Get("/quotes")
+    .RateLimited(10, TimeSpan.FromMinutes(1), RateLimitPartitionKind.Header, "X-Api-Key",
+        quota: new DynamicEndpointQuota { Limit = 10_000, Period = QuotaPeriod.Day });
+```
+
+```json
+"rateLimit": { "algorithm": "SlidingWindow", "permitLimit": 100, "windowSeconds": 60, "segmentsPerWindow": 6,
+               "partitionBy": "User", "quota": { "limit": 5000, "period": "Day" } }
+```
+
+- **Algorithms:** `FixedWindow`, `SlidingWindow`, `TokenBucket` (`permitLimit` is the bucket size, `tokensPerPeriod` the refill),
+  `Concurrency`. `queueLimit` lets requests wait instead of failing.
+- **Partitions:** `IpAddress` (default; use `UseForwardedHeaders` behind a proxy), `User` (anonymous requests by IP), `Header`
+  (e.g. an API key; requests without it by IP) or `Endpoint` (one budget for everybody).
+- **Quota:** a second, long-term limit (`Hour`, `Day`, `Week`, `Month` = 30 days) for the same partitions. Windows start with the
+  first request of a partition, not on calendar boundaries.
+- **Rejections:** `429 Too Many Requests` with `Retry-After`, built by `IDynamicErrorResponseFactory` (`DynamicErrorKind.TooManyRequests`).
+- **Changes:** counters belong to the limit settings. Changing them starts fresh counters, reloads and unrelated edits keep them.
+  Counters are kept in memory per instance, so with N instances a client can get up to N times the limit.
+- A definition uses either `rateLimitingPolicy` (a named policy) or `rateLimit`, not both. OpenAPI documents the limit and the `429`.
 </details>
 
 <details>
@@ -754,7 +922,10 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
 | `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
 | `DynamicEndpoints.OpenTelemetry` | `AddDynamicEndpointsInstrumentation()` for OpenTelemetry metrics and tracing |
+| `DynamicEndpoints.Sql` | read-only, parameterized SQL query processor for any ADO.NET provider |
+| `DynamicEndpoints.Yaml` | YAML for export, import and the OpenAPI import |
 | `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
+| `DynamicEndpoints.Cli` | `dynamic-endpoints` .NET tool: list, export, diff, push, import-openapi – GitOps from CI |
 
 ## 🧪 Sample app
 
@@ -826,6 +997,9 @@ src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
 src/DynamicEndpoints.OpenTelemetry         OpenTelemetry registration
+src/DynamicEndpoints.Sql                   read-only SQL query processor
+src/DynamicEndpoints.Yaml                  YAML text format
+src/DynamicEndpoints.Cli                   dynamic-endpoints .NET tool
 src/DynamicEndpoints.Testing               test helpers
 samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite (or PostgreSQL), Dockerfile
 samples/DynamicEndpoints.AppHost           .NET Aspire: the sample ×2 with PostgreSQL, Redis and the dashboard
@@ -863,6 +1037,9 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
 | `DynamicEndpoints.Redis` | [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) (MIT) |
 | `DynamicEndpoints.OpenTelemetry` | [OpenTelemetry.Api](https://github.com/open-telemetry/opentelemetry-dotnet) (Apache-2.0) |
+| `DynamicEndpoints.Sql` | ASP.NET Core shared framework only (bring your ADO.NET provider) |
+| `DynamicEndpoints.Yaml` | [YamlDotNet](https://github.com/aaubry/YamlDotNet) (MIT) |
+| `DynamicEndpoints.Cli` | `DynamicEndpoints.Yaml` |
 | `DynamicEndpoints.Testing` | `Microsoft.AspNetCore.Mvc.Testing` (MIT) |
 
 ## 🤝 Contributing

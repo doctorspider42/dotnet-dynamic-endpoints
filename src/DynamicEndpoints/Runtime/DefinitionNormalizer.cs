@@ -26,6 +26,15 @@ internal static class DefinitionNormalizer
             AuthorizationPolicy = Clean(d.AuthorizationPolicy),
             RateLimitingPolicy = Clean(d.RateLimitingPolicy),
             Group = Clean(d.Group),
+            Caching = d.Caching is { } caching
+                ? caching with
+                {
+                    OutputCachePolicy = Clean(caching.OutputCachePolicy),
+                    VaryByQuery = CleanList(caching.VaryByQuery),
+                    VaryByHeader = CleanList(caching.VaryByHeader),
+                }
+                : null,
+            RateLimit = d.RateLimit is { } rateLimit ? rateLimit with { PartitionHeader = Clean(rateLimit.PartitionHeader) } : null,
             Parameters = (d.Parameters ?? []).Select(p => p with
             {
                 Name = (p.Name ?? string.Empty).Trim(),
@@ -53,4 +62,7 @@ internal static class DefinitionNormalizer
         (validators ?? []).Select(v => v with { Name = (v.Name ?? string.Empty).Trim() }).ToList();
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static List<string>? CleanList(IReadOnlyList<string>? values) =>
+        values?.Select(Clean).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList() is { Count: > 0 } list ? list : null;
 }

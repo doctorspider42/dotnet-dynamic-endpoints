@@ -6,8 +6,10 @@ using DynamicEndpoints.Processing;
 using DynamicEndpoints.Runtime;
 using DynamicEndpoints.Validation;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -44,9 +46,17 @@ public static class DynamicEndpointsServiceCollectionExtensions
         services.TryAddSingleton<DynamicEndpointRuntime>();
         services.TryAddSingleton<IDynamicEndpointManager, DynamicEndpointManager>();
         services.TryAddSingleton<IDynamicOpenApiDocumentProvider, DynamicOpenApiDocumentProvider>();
+        services.TryAddSingleton<IDynamicEndpointSnippetGenerator, DynamicEndpointSnippetGenerator>();
+        services.TryAddSingleton<IDynamicEndpointTransfer, DynamicEndpointTransfer>();
+        services.TryAddSingleton<IDynamicEndpointOpenApiImporter, DynamicEndpointOpenApiImporter>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDynamicEndpointsTextFormat, JsonDynamicEndpointsTextFormat>());
         services.TryAddSingleton<IDynamicEndpointStore, InMemoryDynamicEndpointStore>();
         services.TryAddSingleton<IDynamicErrorResponseFactory, DefaultDynamicErrorResponseFactory>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DynamicEndpointsHostedService>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDynamicEndpointChangeHandler, OutputCacheEvictionHandler>());
+
+        // Serves the rate limits defined in the definitions themselves; effective once the app calls AddRateLimiter/UseRateLimiter.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<RateLimiterOptions>, ConfigureDynamicRateLimiting>());
 
         return new DynamicEndpointsBuilder(services);
     }

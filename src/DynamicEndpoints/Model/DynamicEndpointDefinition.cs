@@ -70,8 +70,14 @@ public sealed record DynamicEndpointDefinition
     /// <summary>Name of an authorization policy that must be satisfied. Implies <see cref="RequireAuthorization"/>.</summary>
     public string? AuthorizationPolicy { get; init; }
 
-    /// <summary>Name of a rate limiting policy registered with <c>AddRateLimiter</c>.</summary>
+    /// <summary>Name of a rate limiting policy registered with <c>AddRateLimiter</c>. For limits defined here, use <see cref="RateLimit"/>.</summary>
     public string? RateLimitingPolicy { get; init; }
+
+    /// <summary>Rate limit and quota defined in the endpoint itself (instead of <see cref="RateLimitingPolicy"/>).</summary>
+    public DynamicEndpointRateLimit? RateLimit { get; init; }
+
+    /// <summary><c>Cache-Control</c>, ETags and server-side output caching of responses.</summary>
+    public DynamicEndpointCaching? Caching { get; init; }
 
     /// <summary>Disabled endpoints are persisted but not routable.</summary>
     public bool Enabled { get; init; } = true;
