@@ -79,6 +79,7 @@ seeing anybody else's endpoints:
 | [OpenAPI import](openapi-import.md) | skeletons belong to the tenant; "route already exists" means the tenant already has it |
 | [Audit log](audit-log.md) | only the tenant's entries |
 | Change sets | `ForTenant("acme").BeginChanges(…)` assigns the tenant to definitions and drafts |
+| [`sql-query`](built-in-processors.md#with-multi-tenancy) | the tenant's endpoints may only use the connections assigned to it (`AllowTenants`); shared endpoints may use all |
 | [Snippets](admin-api.md#snippets) | requests of the tenant: tenant route prefix filled in, tenant header added |
 | [`/info`](admin-api.md#info) | `tenant` names the tenant of the admin API |
 

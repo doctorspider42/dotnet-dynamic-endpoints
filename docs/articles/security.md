@@ -10,7 +10,9 @@
   or port, and every value is URL-encoded. Secrets stay in the configuration (`{config:Section:Key}`, `signingSecretConfigurationKey`).
   See [Built-in processors](built-in-processors.md).
 - 🗄️ **SQL:** the `sql-query` processor binds parameters only and rejects anything but a single read-only statement, but it is a
-  safety net, not a sandbox. Give it a database user that can read exactly what the endpoints may expose.
+  safety net, not a sandbox. Give it a database user that can read exactly what the endpoints may expose. With multi-tenancy,
+  a tenant's endpoints can only use the connections assigned to that tenant (`AllowTenants`), never the default one unless it's
+  assigned ([built-in processors](built-in-processors.md#with-multi-tenancy)).
 - 📥 **Imports** (export/import, OpenAPI) are validated as a whole like any definition, and nothing is written when one is
   invalid. Imported OpenAPI skeletons are disabled until somebody reviewed them.
 - 🖥️ **Admin panel:** holds no data, sets `X-Content-Type-Options: nosniff`, `frame-ancestors 'none'` and

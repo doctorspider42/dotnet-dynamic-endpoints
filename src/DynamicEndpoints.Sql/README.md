@@ -53,5 +53,26 @@ Treat "can edit definitions" as "can read what the connection's database user ca
   tables and views the endpoints may expose**, and keep the admin API behind authorization.
 - Responses can contain anything the query selects: don't select secrets, and use `maxRows` to keep responses small.
 
+## Multi-tenancy
+
+With `UseMultiTenancy()`, connections are assigned to tenants:
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .UseMultiTenancy(t => t.FromHeader("X-Tenant-Id"))
+    .AddSqlQueryProcessor(_ => new NpgsqlConnection(appReadOnly), o =>
+    {
+        o.Connections["acme-reports"] = _ => new NpgsqlConnection(acmeReadOnly);
+        o.AllowTenants("acme-reports", "acme");            // "" is the default connection
+    });
+```
+
+- **Shared endpoints** (no tenant) may use every connection.
+- **A tenant's endpoints** may only use the connections assigned to that tenant (`AllowTenants`, or
+  `SqlQueryProcessorOptions.ConnectionTenants`). Unassigned connections – the default one included – are off limits, so a tenant's
+  admin can't query the application's or another tenant's database.
+- Checked when the definition is saved (the error lists only the connections available to that tenant) and again before every
+  run: an endpoint whose connection was taken away from its tenant answers `500` instead of running.
+
 📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/built-in-processors.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)
