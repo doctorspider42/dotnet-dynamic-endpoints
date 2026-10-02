@@ -1,0 +1,160 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Petstore",
+    "version": "1.0.0",
+    "description": "A small contract-first API. Imported in mock mode on start: every operation answers with its documented example."
+  },
+  "tags": [
+    { "name": "pets", "description": "Everything about the pets" },
+    { "name": "store", "description": "Orders and the inventory" }
+  ],
+  "paths": {
+    "/pets": {
+      "get": {
+        "operationId": "listPets",
+        "summary": "List pets",
+        "tags": ["pets"],
+        "parameters": [
+          { "name": "limit", "in": "query", "description": "How many pets to return.", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["available", "pending", "sold"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of pets.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } },
+                "example": [
+                  { "id": 1, "name": "Rex", "species": "dog", "status": "available" },
+                  { "id": 2, "name": "Tom", "species": "cat", "status": "sold" }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPet",
+        "summary": "Create a pet",
+        "tags": ["pets"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NewPet" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "The new pet.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Pet" },
+                "example": { "id": 3, "name": "{{name}}", "species": "{{species}}", "status": "available" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pets/{petId}": {
+      "parameters": [
+        { "name": "petId", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } }
+      ],
+      "get": {
+        "operationId": "getPet",
+        "summary": "Get a pet",
+        "tags": ["pets"],
+        "responses": {
+          "200": {
+            "description": "The pet.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Pet" },
+                "example": { "id": "{{petId}}", "name": "Rex", "species": "dog", "status": "available" }
+              }
+            }
+          },
+          "404": { "description": "No such pet." }
+        }
+      },
+      "delete": {
+        "operationId": "deletePet",
+        "summary": "Delete a pet",
+        "tags": ["pets"],
+        "responses": { "204": { "description": "Deleted." } }
+      }
+    },
+    "/store/inventory": {
+      "get": {
+        "operationId": "getInventory",
+        "summary": "Pets per status",
+        "tags": ["store"],
+        "x-dynamic-endpoints-processor": "inventory",
+        "responses": {
+          "200": {
+            "description": "Counts per status.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": { "type": "integer" } },
+                "example": { "available": 0, "pending": 0, "sold": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store/orders": {
+      "post": {
+        "operationId": "placeOrder",
+        "summary": "Order a pet",
+        "tags": ["store"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["petId"],
+                "properties": {
+                  "petId": { "type": "integer", "minimum": 1 },
+                  "quantity": { "type": "integer", "minimum": 1, "maximum": 10, "default": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The order.",
+            "content": {
+              "application/json": {
+                "example": { "orderId": 1001, "petId": "{{petId}}", "quantity": "{{quantity}}", "status": "placed" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Pet": {
+        "type": "object",
+        "required": ["id", "name", "species"],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string", "maxLength": 50 },
+          "species": { "type": "string", "enum": ["dog", "cat", "bird"] },
+          "status": { "type": "string", "enum": ["available", "pending", "sold"] }
+        }
+      },
+      "NewPet": {
+        "type": "object",
+        "required": ["name", "species"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 50 },
+          "species": { "type": "string", "enum": ["dog", "cat", "bird"] }
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,8 @@ internal sealed class ValidationErrors(DynamicValidationMessages? messages = nul
 
     public bool HasErrors => _errors.Count > 0;
 
+    public int Count => _errors.Values.Sum(e => e.Count);
+
     public bool Contains(string key) => _errors.ContainsKey(key);
 
     /// <summary>Errors for <paramref name="key"/> itself or anything nested in it (<c>key.x</c>, <c>key[0]</c>).</summary>

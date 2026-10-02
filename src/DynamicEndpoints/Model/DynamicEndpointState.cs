@@ -14,13 +14,22 @@ public enum DynamicEndpointStatus
     Invalid,
     /// <summary>Changed in the store, not yet picked up by this instance.</summary>
     Pending,
+    /// <summary>Never published – only a draft exists (see <see cref="DynamicEndpointState.Draft"/>).</summary>
+    Draft,
 }
 
 /// <summary>A persisted definition together with its runtime status on the current instance.</summary>
 public sealed record DynamicEndpointState(
     DynamicEndpointDefinition Definition,
     DynamicEndpointStatus Status,
-    IReadOnlyList<string> Errors);
+    IReadOnlyList<string> Errors)
+{
+    /// <summary>
+    /// The unpublished draft of the endpoint, if any. For <see cref="DynamicEndpointStatus.Draft"/> it's the only thing there is,
+    /// and <see cref="Definition"/> is the draft's definition.
+    /// </summary>
+    public DynamicEndpointDraft? Draft { get; init; }
+}
 
 public sealed record DynamicEndpointValidationResult(
     bool IsValid,

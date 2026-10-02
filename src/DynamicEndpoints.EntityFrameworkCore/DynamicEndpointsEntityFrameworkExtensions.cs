@@ -9,13 +9,14 @@ public static class DynamicEndpointsEntityFrameworkExtensions
 {
     /// <summary>
     /// Persists definitions through your own context. Add the table to its model with
-    /// <c>modelBuilder.ApplyDynamicEndpointsConfiguration()</c> and create it via your migrations.
+    /// <c>modelBuilder.ApplyDynamicEndpointsConfiguration()</c> and create it via your migrations. History and drafts are kept when
+    /// the model also maps their tables (the default of <c>ApplyDynamicEndpointsConfiguration</c>).
     /// </summary>
     public static IDynamicEndpointsBuilder UseEntityFrameworkStore<TContext>(this IDynamicEndpointsBuilder builder)
         where TContext : DbContext
     {
         builder.Services.Replace(ServiceDescriptor.Scoped<IDynamicEndpointStore>(sp =>
-            new EntityFrameworkDynamicEndpointStore<TContext>(sp.GetRequiredService<TContext>(), saveChanges: true)));
+            EntityFrameworkDynamicEndpointStore.Create(sp.GetRequiredService<TContext>(), saveChanges: true)));
         return builder;
     }
 
@@ -40,4 +41,13 @@ public static class DynamicEndpointsEntityFrameworkExtensions
     public static IDynamicEndpointsBuilder MigrateOnStartup<TContext>(this IDynamicEndpointsBuilder builder)
         where TContext : DbContext =>
         builder.AddStoreInitializer<MigrateDatabaseInitializer<TContext>>();
+
+    /// <summary>
+    /// Writes audit entries to a table of your own context and makes them queryable through the admin API. Add the table with
+    /// <c>modelBuilder.ApplyDynamicEndpointsAuditConfiguration()</c> and your migrations. Entries are saved by their own
+    /// <c>SaveChanges</c> (on a context of their own scope), after the change was applied.
+    /// </summary>
+    public static DynamicEndpointsAuditBuilder ToEntityFramework<TContext>(this DynamicEndpointsAuditBuilder builder)
+        where TContext : DbContext =>
+        builder.To<EntityFrameworkDynamicEndpointAuditLog<TContext>>(ServiceLifetime.Scoped);
 }

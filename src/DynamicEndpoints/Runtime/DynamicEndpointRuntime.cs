@@ -89,9 +89,13 @@ internal sealed class DynamicEndpointRuntime(
     {
         foreach (var other in activeDynamicEndpoints)
         {
-            if (other.Definition.Id != candidate.Definition.Id && other.RouteKey == candidate.RouteKey)
+            // Endpoints of different tenants may share a route; a shared endpoint is routable for every tenant.
+            if (other.Definition.Id != candidate.Definition.Id && other.RouteKey == candidate.RouteKey &&
+                (other.Definition.Tenant is null || candidate.Definition.Tenant is null ||
+                 DynamicEndpointsTenancyOptions.SameTenant(other.Definition.Tenant, candidate.Definition.Tenant)))
             {
-                yield return $"Route conflicts with dynamic endpoint '{other.Definition.Name ?? other.Definition.Route}' ({other.Definition.Id}).";
+                yield return $"Route conflicts with dynamic endpoint '{other.Definition.Name ?? other.Definition.Route}' ({other.Definition.Id})" +
+                    (other.Definition.Tenant is null ? "." : $" of tenant '{other.Definition.Tenant}'.");
             }
         }
 
@@ -127,7 +131,8 @@ internal sealed class DynamicEndpointRuntime(
             compiled.RoutePattern,
             order: 0)
         {
-            DisplayName = $"Dynamic {d.Method} {d.Route}" + (d.Name is null ? string.Empty : $" ({d.Name})"),
+            DisplayName = $"Dynamic {d.Method} {d.Route}" + (d.Name is null ? string.Empty : $" ({d.Name})") +
+                (d.Tenant is null ? string.Empty : $" [tenant {d.Tenant}]"),
         };
 
         builder.Metadata.Add(new HttpMethodMetadata([d.Method]));
@@ -146,6 +151,9 @@ internal sealed class DynamicEndpointRuntime(
         {
             builder.Metadata.Add(new EnableRateLimitingAttribute(d.RateLimitingPolicy));
         }
+
+        RateLimiting.AddMetadata(builder, d);
+        ResponseCaching.AddMetadata(builder, d);
 
         conventions.Apply(builder, b => options.Value.ConfigureEndpoint?.Invoke(b, d));
         return builder.Build();

@@ -30,6 +30,12 @@ public sealed record DynamicEndpointDefinition
     public string? Group { get; init; }
 
     /// <summary>
+    /// Tenant the endpoint belongs to (multi-tenancy, see <c>UseMultiTenancy()</c>). It is routable only for requests resolved to
+    /// this tenant; <c>null</c> makes it a shared endpoint, routable for every tenant.
+    /// </summary>
+    public string? Tenant { get; init; }
+
+    /// <summary>
     /// Name of a registered <see cref="IDynamicEndpointProcessor"/> that handles validated requests.
     /// Falls back to <see cref="DynamicEndpointsOptions.DefaultProcessor"/> when empty.
     /// </summary>
@@ -70,8 +76,20 @@ public sealed record DynamicEndpointDefinition
     /// <summary>Name of an authorization policy that must be satisfied. Implies <see cref="RequireAuthorization"/>.</summary>
     public string? AuthorizationPolicy { get; init; }
 
-    /// <summary>Name of a rate limiting policy registered with <c>AddRateLimiter</c>.</summary>
+    /// <summary>Name of a rate limiting policy registered with <c>AddRateLimiter</c>. For limits defined here, use <see cref="RateLimit"/>.</summary>
     public string? RateLimitingPolicy { get; init; }
+
+    /// <summary>Rate limit and quota defined in the endpoint itself (instead of <see cref="RateLimitingPolicy"/>).</summary>
+    public DynamicEndpointRateLimit? RateLimit { get; init; }
+
+    /// <summary><c>Cache-Control</c>, ETags and server-side output caching of responses.</summary>
+    public DynamicEndpointCaching? Caching { get; init; }
+
+    /// <summary>
+    /// Where the definition came from, e.g. the OpenAPI operation it was imported from – a re-import updates (or a sync deletes)
+    /// only endpoints with its origin. <c>null</c> for endpoints created by hand.
+    /// </summary>
+    public DynamicEndpointOrigin? Origin { get; init; }
 
     /// <summary>Disabled endpoints are persisted but not routable.</summary>
     public bool Enabled { get; init; } = true;

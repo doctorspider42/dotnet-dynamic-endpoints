@@ -1,0 +1,55 @@
+# The showcase app (samples/Showcase) as it would run for a live demo: two instances behind one port, PostgreSQL for the
+# definitions and Redis for instant propagation of changes. Nothing here deploys anything – it runs on your machine:
+#
+#   docker compose -f samples/docker-compose.yml up --build        → http://localhost:8080/admin/
+#
+# For a hosted demo, use the same image (samples/Showcase/Dockerfile) with a managed PostgreSQL and Redis,
+# and point OTEL_EXPORTER_OTLP_ENDPOINT at your collector to get the dynamic_endpoints.* metrics and traces.
+
+name: dynamic-endpoints-demo
+
+services:
+  sample:
+    build:
+      context: ..
+      dockerfile: samples/Showcase/Dockerfile
+    environment:
+      ConnectionStrings__dynamicendpoints: "Host=postgres;Database=dynamicendpoints;Username=postgres;Password=postgres"
+      ConnectionStrings__redis: "redis:6379"
+      Demo__Enabled: "true"
+      Demo__ResetInterval: "01:00:00"
+    deploy:
+      replicas: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  proxy:
+    # One public port in front of both instances (round robin through Docker's DNS).
+    image: nginx:1.29-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - sample
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dynamicendpoints
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  postgres-data:

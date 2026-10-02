@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackageId>DynamicEndpoints.Cli</PackageId>
+    <AssemblyName>dynamic-endpoints</AssemblyName>
+    <RootNamespace>DynamicEndpoints.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dynamic-endpoints</ToolCommandName>
+    <Description>Command-line tool for DynamicEndpoints: list, export, diff and push endpoint definitions through the admin REST API – GitOps from CI.</Description>
+    <PackageTags>$(PackageTags);cli;gitops;dotnet-tool</PackageTags>
+    <!-- A tool, not a library: no API documentation and no symbol package. -->
+    <IncludeSymbols>false</IncludeSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DynamicEndpoints.Yaml\DynamicEndpoints.Yaml.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicEndpoints.Tests" />
+  </ItemGroup>
+
+</Project>

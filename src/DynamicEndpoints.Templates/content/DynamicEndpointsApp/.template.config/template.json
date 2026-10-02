@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Pawel Pajak",
+  "classifications": [ "Web", "API" ],
+  "identity": "DynamicEndpoints.Templates.WebApi",
+  "name": "ASP.NET Core API with DynamicEndpoints",
+  "description": "A minimal API with runtime-defined endpoints (DynamicEndpoints), EF Core SQLite persistence, admin API and panel, OpenAPI and Swagger UI.",
+  "shortName": "dynamic-endpoints",
+  "sourceName": "DynamicEndpointsApp",
+  "defaultName": "DynamicEndpointsApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "DynamicEndpointsVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "description": "Version (or floating range) of the DynamicEndpoints packages to reference.",
+      "defaultValue": "0.4.*",
+      "replaces": "0.0.0-dynamic-endpoints-version"
+    },
+    "NoAdminUI": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "Leave out the admin panel (DynamicEndpoints.AdminUI).",
+      "defaultValue": "false"
+    },
+    "NoSwagger": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "Leave out Swagger UI.",
+      "defaultValue": "false"
+    },
+    "HttpPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": { "low": 5000, "high": 5300, "fallback": 5118 },
+      "replaces": "5118"
+    },
+    "HttpsPort": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": { "low": 7000, "high": 7300, "fallback": 7175 },
+      "replaces": "7175"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "DynamicEndpointsApp.csproj" }
+  ]
+}

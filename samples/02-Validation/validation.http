@@ -1,0 +1,63 @@
+# samples/02-Validation – start it with: dotnet run --project samples/02-Validation
+@baseUrl = http://localhost:5102
+
+### 1. Constraints – all errors at once, in the application's error format
+POST {{baseUrl}}/contacts
+Content-Type: application/json
+
+{ "email": "not-an-email", "phone": "123", "country": "FR" }
+
+### …in Polish
+POST {{baseUrl}}/contacts
+Content-Type: application/json
+Accept-Language: pl
+
+{ "name": "Jan", "email": "nope" }
+
+### …valid: the normalized parameters, with the default country
+POST {{baseUrl}}/contacts
+Content-Type: application/json
+
+{ "name": "Jan Kowalski", "email": "jan@example.com", "phone": "+48123456789", "callAt": "09:30", "tags": ["vip"] }
+
+### 2. Parameter validators – NIP checksum (C#) and IBAN (FluentValidation)
+POST {{baseUrl}}/invoices
+Content-Type: application/json
+
+{ "nip": "526-000-12-47", "iban": "PL00 1234", "amount": 10 }
+
+### …valid
+POST {{baseUrl}}/invoices
+Content-Type: application/json
+
+{ "nip": "526-000-12-46", "iban": "PL61 1090 1014 0000 0712 1981 2874", "amount": 100 }
+
+### 3. Rules (JsonLogic) – check-out before check-in, two guests in a single room
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{ "roomType": "single", "guests": 2, "checkIn": "2030-11-05", "checkOut": "2030-11-01" }
+
+### 4. Request validator (FluentValidation) – more than 14 nights
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{ "roomType": "double", "guests": 2, "checkIn": "2030-11-01", "checkOut": "2030-11-30" }
+
+### 4. Request validator (C#, with configuration) – the total is above maxTotal
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{ "sku": "ANV-1", "quantity": 1000, "unitPrice": 49.9 }
+
+### Unknown route – the error factory answers it too
+GET {{baseUrl}}/nothing-here
+
+### Broken JSON
+POST {{baseUrl}}/contacts
+Content-Type: application/json
+
+{ nope
+
+### The registered validators (what the panel offers)
+GET {{baseUrl}}/api/admin/endpoints/validators

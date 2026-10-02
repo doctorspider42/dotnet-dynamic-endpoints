@@ -1,0 +1,36 @@
+# samples/01-QuickStart – start it with: dotnet run --project samples/01-QuickStart
+@baseUrl = http://localhost:5101
+
+### Seeded: GET /hello/{name}
+GET {{baseUrl}}/hello/Ada
+
+### 400 – the name is too short (2–30 characters)
+GET {{baseUrl}}/hello/A
+
+### Same processor, another configuration (shout) and a default for 'name'
+GET {{baseUrl}}/greetings?name=Ada
+
+### The definitions, with their status
+GET {{baseUrl}}/api/admin/endpoints
+
+### The registered processors (what the panel offers)
+GET {{baseUrl}}/api/admin/endpoints/processors
+
+### Create an endpoint at runtime
+POST {{baseUrl}}/api/admin/endpoints
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "route": "/ahoy",
+  "name": "Ahoy",
+  "processor": "greeting",
+  "processorConfig": { "greeting": "Ahoy" },
+  "parameters": [{ "name": "name", "source": "Query", "maxLength": 30 }]
+}
+
+### …and call it
+GET {{baseUrl}}/ahoy?name=Jack
+
+### The generated OpenAPI document
+GET {{baseUrl}}/openapi/dynamic.json

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DynamicEndpoints\DynamicEndpoints.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.EntityFrameworkCore\DynamicEndpoints.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.AdminUI\DynamicEndpoints.AdminUI.csproj" />
+    <!-- YAML documents for the import, export and the CLI. -->
+    <ProjectReference Include="..\..\src\DynamicEndpoints.Yaml\DynamicEndpoints.Yaml.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.Analyzers\DynamicEndpoints.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

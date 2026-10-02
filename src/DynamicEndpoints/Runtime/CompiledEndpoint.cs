@@ -33,6 +33,12 @@ internal sealed class CompiledEndpoint
 
     public required JsonObject Configuration { get; init; }
 
+    /// <summary><c>Cache-Control</c> of successful responses (see <see cref="DynamicEndpointDefinition.Caching"/>).</summary>
+    public string? CacheControl { get; init; }
+
+    /// <summary>Request headers listed in the <c>Vary</c> header of successful, cacheable responses.</summary>
+    public string[] VaryHeaders { get; init; } = [];
+
     public bool HasBody => Parameters.Any(p => p.Definition.Source == ParameterSource.Body);
 
     public bool HasForm => Parameters.Any(p => p.Definition.Source == ParameterSource.Form);
@@ -41,6 +47,9 @@ internal sealed class CompiledEndpoint
     public DynamicEndpointMetadata Metadata => _metadata ??= new DynamicEndpointMetadata(Definition, ProcessorName);
 
     public ConcurrentDictionary<Type, object?> ConfigurationCache { get; } = new();
+
+    /// <summary>Tags of the endpoint's metrics and activities, built on first use.</summary>
+    public KeyValuePair<string, object?>[]? TelemetryTags { get; set; }
 }
 
 internal sealed record CompiledParameter(ParameterDefinition Definition, Regex? Pattern)

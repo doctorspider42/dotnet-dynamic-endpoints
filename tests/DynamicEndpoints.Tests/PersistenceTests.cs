@@ -119,7 +119,15 @@ public sealed class PersistenceTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/greetings/pirate")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/greetings/pirate/Jack")).StatusCode);
 
+        // Scaffolded ef-crud endpoints on the sample's products: each tenant sees its own rows only.
+        using var products = new HttpRequestMessage(HttpMethod.Get, "/shop/products?sort=-price");
+        products.Headers.Add("X-Tenant", "acme");
+        var page = await (await client.SendAsync(products)).Content.ReadFromJsonAsync<JsonObject>();
+        Assert.Equal(["Rocket skates", "Anvil", "Giant magnet"], page!["items"]!.AsArray().Select(i => (string)i!["name"]!));
+        Assert.Null(page["items"]![0]!["purchasePrice"]);
+
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/openapi/dynamic.json")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/admin/")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/admin/index.html")).StatusCode);
     }
 

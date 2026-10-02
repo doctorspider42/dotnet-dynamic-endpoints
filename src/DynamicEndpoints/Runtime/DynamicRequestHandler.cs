@@ -1,13 +1,47 @@
+using System.Diagnostics;
+using DynamicEndpoints.Diagnostics;
+using DynamicEndpoints.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using static DynamicEndpoints.DynamicEndpointsTelemetry;
 
 namespace DynamicEndpoints.Runtime;
 
 /// <summary>The request delegate shared by every dynamic endpoint: filters → bind → validate → process.</summary>
-internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<DynamicRequestHandler> logger)
+internal sealed class DynamicRequestHandler(
+    ParameterBinder binder,
+    DynamicEndpointsInstrumentation instrumentation,
+    ILogger<DynamicRequestHandler> logger,
+    DynamicEndpointTenantResolution tenants,
+    IOptions<DynamicEndpointsOptions> options)
 {
     public async Task HandleAsync(HttpContext context, CompiledEndpoint endpoint)
+    {
+        var started = Stopwatch.GetTimestamp();
+        using var activity = DynamicEndpointsInstrumentation.StartActivity(Activities.Request, endpoint);
+        var outcome = Outcomes.Error;
+        try
+        {
+            outcome = await HandleCoreAsync(context, endpoint);
+        }
+        catch (Exception ex)
+        {
+            DynamicEndpointsInstrumentation.Failed(activity, ex);
+            instrumentation.RecordError(endpoint, ex);
+            throw;
+        }
+        finally
+        {
+            // Exceptions are answered later (error middleware, developer page) – a 500 is what the client gets.
+            var statusCode = outcome == Outcomes.Error ? StatusCodes.Status500InternalServerError : context.Response.StatusCode;
+            activity?.SetTag(Tags.Outcome, outcome);
+            instrumentation.RecordRequest(endpoint, outcome, statusCode, Stopwatch.GetElapsedTime(started));
+        }
+    }
+
+    private async Task<string> HandleCoreAsync(HttpContext context, CompiledEndpoint endpoint)
     {
         var definition = endpoint.Definition;
         using var scope = logger.BeginScope(new Dictionary<string, object?>
@@ -20,6 +54,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         var filters = context.RequestServices.GetServices<IDynamicEndpointFilter>().ToArray();
         if (filters.Length > 0)
         {
+            using var filtersActivity = DynamicEndpointsInstrumentation.StartActivity(Activities.Filters, endpoint);
             var requestContext = new DynamicEndpointRequestContext(context, endpoint.Metadata);
             foreach (var filter in filters)
             {
@@ -27,47 +62,127 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
                 if (requestContext.Result is { } shortCircuit)
                 {
                     await shortCircuit.ExecuteAsync(context);
-                    return;
+                    return Outcomes.ShortCircuited;
                 }
             }
         }
 
-        var binding = await binder.BindAsync(context, endpoint);
+        BindingResult binding;
+        using (var bindingActivity = DynamicEndpointsInstrumentation.StartActivity(Activities.Binding, endpoint))
+        {
+            binding = await binder.BindAsync(context, endpoint);
+            bindingActivity?.SetTag(Tags.ValidationErrors, binding.Errors.Count);
+        }
+
         if (binding.Rejection is { } rejection)
         {
+            instrumentation.RecordValidationFailure(endpoint, ValidationLayers.Binding);
             await RejectAsync(context, endpoint, filters, binding, rejection);
-            return;
+            return Outcomes.Rejected;
         }
 
         // Cheap checks first, all reported together; expensive request-level validators only for otherwise valid input.
         var errors = binding.Errors;
-        RequestValidator.ValidateStructure(endpoint, binding.Values, errors);
-        await RunParameterValidatorsAsync(context, endpoint, binding, errors, items);
-        if (!errors.HasErrors)
+        var failedLayers = new List<string>(1);
+        if (errors.HasErrors)
         {
-            RequestValidator.ValidateRules(endpoint, binding.Values, errors);
+            failedLayers.Add(ValidationLayers.Binding);
         }
 
-        if (!errors.HasErrors)
+        await ValidateLayerAsync(ValidationLayers.Constraints, endpoint, errors, failedLayers, () =>
         {
-            foreach (var validator in endpoint.Validators)
+            RequestValidator.ValidateStructure(endpoint, binding.Values, errors);
+            return Task.CompletedTask;
+        });
+
+        if (endpoint.Parameters.Any(p => p.Validators.Count > 0))
+        {
+            await ValidateLayerAsync(ValidationLayers.ParameterValidators, endpoint, errors, failedLayers,
+                () => RunParameterValidatorsAsync(context, endpoint, binding, errors, items));
+        }
+
+        if (!errors.HasErrors && endpoint.Rules.Count > 0)
+        {
+            await ValidateLayerAsync(ValidationLayers.Rules, endpoint, errors, failedLayers, () =>
             {
-                await RunAsync(context, endpoint, validator, null, binding, errors, items);
-            }
+                RequestValidator.ValidateRules(endpoint, binding.Values, errors);
+                return Task.CompletedTask;
+            });
+        }
+
+        if (!errors.HasErrors && endpoint.Validators.Count > 0)
+        {
+            await ValidateLayerAsync(ValidationLayers.RequestValidators, endpoint, errors, failedLayers, async () =>
+            {
+                foreach (var validator in endpoint.Validators)
+                {
+                    await RunAsync(context, endpoint, validator, null, binding, errors, items);
+                }
+            });
         }
 
         if (errors.HasErrors)
         {
             logger.LogDebug("Request to dynamic endpoint {Method} {Route} failed validation.", definition.Method, definition.Route);
+            foreach (var layer in failedLayers)
+            {
+                instrumentation.RecordValidationFailure(endpoint, layer);
+            }
+
             var title = errors.Format(ErrorMessage.Of("title.validation", string.Empty));
             await RejectAsync(context, endpoint, filters, binding,
                 new RequestRejection(DynamicRequestRejection.Validation, StatusCodes.Status400BadRequest, title));
-            return;
+            return Outcomes.Rejected;
         }
 
-        var processor = context.RequestServices.GetRequiredKeyedService<IDynamicEndpointProcessor>(endpoint.ProcessorName);
-        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context, items));
-        await (result ?? Results.Empty).ExecuteAsync(context);
+        var started = Stopwatch.GetTimestamp();
+        using (var processorActivity = DynamicEndpointsInstrumentation.StartActivity(Activities.Processor, endpoint))
+        {
+            try
+            {
+                var processor = context.RequestServices.GetRequiredKeyedService<IDynamicEndpointProcessor>(endpoint.ProcessorName);
+                var tenant = definition.Tenant ?? (options.Value.Tenancy.Enabled ? await tenants.ResolveAsync(context) : null);
+                var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context, items, tenant));
+                await ResponseCaching.ExecuteAsync(context, endpoint, result ?? Results.Empty);
+                processorActivity?.SetTag(Tags.StatusCode, context.Response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                DynamicEndpointsInstrumentation.Failed(processorActivity, ex);
+                throw;
+            }
+            finally
+            {
+                instrumentation.RecordProcessor(endpoint, Stopwatch.GetElapsedTime(started));
+            }
+        }
+
+        return Outcomes.Processed;
+    }
+
+    private static async ValueTask ValidateLayerAsync(
+        string layer, CompiledEndpoint endpoint, ValidationErrors errors, List<string> failedLayers, Func<Task> validate)
+    {
+        var activity = DynamicEndpointsInstrumentation.StartValidation(layer, endpoint);
+        var before = errors.Count;
+        try
+        {
+            await validate();
+        }
+        catch (Exception ex)
+        {
+            DynamicEndpointsInstrumentation.Failed(activity, ex);
+            throw;
+        }
+        finally
+        {
+            DynamicEndpointsInstrumentation.StopValidation(activity, errors.Count - before);
+        }
+
+        if (errors.Count > before)
+        {
+            failedLayers.Add(layer);
+        }
     }
 
     private static async Task RejectAsync(

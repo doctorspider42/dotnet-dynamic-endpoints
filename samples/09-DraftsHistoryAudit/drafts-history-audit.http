@@ -1,0 +1,62 @@
+# samples/09-DraftsHistoryAudit – start it with: dotnet run --project samples/09-DraftsHistoryAudit
+@baseUrl = http://localhost:5109
+@admin = {{baseUrl}}/api/admin/endpoints
+@prices = {{admin}}/0199c0de-0000-7000-8000-000000000001
+
+### Revision 2 is live
+GET {{baseUrl}}/prices/ANV-1
+
+### The drafts
+GET {{admin}}/drafts
+
+### The draft of GET /prices/{sku}
+GET {{prices}}/draft
+
+### What publishing would change
+GET {{prices}}/draft/diff
+
+### Publish it – as alice
+POST {{prices}}/publish
+X-User: alice
+
+### Revision 3: price 15 and a currency parameter
+GET {{baseUrl}}/prices/ANV-1?currency=PLN
+
+### The history, newest first
+GET {{prices}}/revisions
+
+### One revision
+GET {{prices}}/revisions/1
+
+### Differences between two revisions
+GET {{prices}}/diff?from=1&to=2
+
+### Roll back to revision 1 – as bob (a new revision, history stays)
+POST {{prices}}/revisions/1/rollback
+X-User: bob
+
+###
+GET {{baseUrl}}/prices/ANV-1
+
+### Draft a new endpoint, scheduled in 30 seconds (change publishAt to a time a bit ahead of now)
+POST {{admin}}/drafts
+Content-Type: application/json
+X-User: alice
+
+{
+  "definition": { "method": "GET", "route": "/flash-sale", "processor": "response", "processorConfig": { "body": { "off": 50 } } },
+  "publishAt": "2030-01-01T00:00:00Z",
+  "comment": "Flash sale"
+}
+
+### 404 until it's published
+GET {{baseUrl}}/flash-sale
+
+### The audit log
+GET {{admin}}/audit
+
+### …of one endpoint, or filtered
+GET {{admin}}/audit?user=alice&limit=20
+
+### Scheduled for two minutes after the first start
+GET {{baseUrl}}/promo

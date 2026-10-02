@@ -8,7 +8,8 @@ namespace DynamicEndpoints.Hosting;
 
 /// <summary>
 /// Loads persisted definitions on start-up and keeps them current: polling (<see cref="DynamicEndpointsOptions.RefreshInterval"/>)
-/// and change notifications both request reloads, which are coalesced – a burst of notifications costs one reload.
+/// and change notifications both request reloads, which are coalesced – a burst of notifications costs one reload. Also publishes
+/// scheduled drafts (<see cref="DynamicEndpointsOptions.ScheduledPublishInterval"/>).
 /// </summary>
 internal sealed class DynamicEndpointsHostedService(
     IDynamicEndpointManager manager,
@@ -80,7 +81,7 @@ internal sealed class DynamicEndpointsHostedService(
     {
         try
         {
-            await Task.WhenAll(ReloadLoopAsync(stoppingToken), PollAsync(stoppingToken), ListenAsync(stoppingToken));
+            await Task.WhenAll(ReloadLoopAsync(stoppingToken), PollAsync(stoppingToken), ListenAsync(stoppingToken), PublishScheduledAsync(stoppingToken));
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -115,6 +116,27 @@ internal sealed class DynamicEndpointsHostedService(
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             RequestReload();
+        }
+    }
+
+    private async Task PublishScheduledAsync(CancellationToken stoppingToken)
+    {
+        if (options.Value.ScheduledPublishInterval is not { } interval || interval <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        using var timer = new PeriodicTimer(interval);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            try
+            {
+                await manager.PublishDueAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Publishing scheduled dynamic endpoint drafts failed; retrying in {Interval}.", interval);
+            }
         }
     }
 

@@ -14,6 +14,10 @@ internal static class RouteKeys
     /// <summary>OpenAPI path template: <c>/orders/{id:int}</c> -> <c>/orders/{id}</c>.</summary>
     public static string ToOpenApiPath(RoutePattern pattern) => Render(pattern, p => "{" + p.Name + "}", lowerCase: false);
 
+    /// <summary>OpenAPI path template with the parameter <paramref name="name"/> replaced by a literal value.</summary>
+    public static string ToOpenApiPath(RoutePattern pattern, string name, string value) =>
+        Render(pattern, p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) ? value : "{" + p.Name + "}", lowerCase: false);
+
     private static string Render(RoutePattern pattern, Func<RoutePatternParameterPart, string> parameter, bool lowerCase)
     {
         var builder = new StringBuilder();

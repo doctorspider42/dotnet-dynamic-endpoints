@@ -2,10 +2,15 @@
 
   <PropertyGroup>
     <PackageId>DynamicEndpoints.EntityFrameworkCore</PackageId>
-    <Description>Entity Framework Core persistence for DynamicEndpoints definitions.</Description>
+    <Description>Entity Framework Core for DynamicEndpoints: persistence of definitions, and the ef-crud processor that exposes allowlisted entities as CRUD endpoints scaffolded from the EF model.</Description>
+    <PackageTags>$(PackageTags);entity-framework-core;crud</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
@@ -13,6 +18,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DynamicEndpoints\DynamicEndpoints.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicEndpoints.Tests" />
   </ItemGroup>
 
 </Project>

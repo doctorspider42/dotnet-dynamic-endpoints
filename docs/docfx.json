@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "../src",
+          "files": [
+            "DynamicEndpoints/DynamicEndpoints.csproj",
+            "DynamicEndpoints.AdminUI/DynamicEndpoints.AdminUI.csproj",
+            "DynamicEndpoints.EntityFrameworkCore/DynamicEndpoints.EntityFrameworkCore.csproj",
+            "DynamicEndpoints.FluentValidation/DynamicEndpoints.FluentValidation.csproj",
+            "DynamicEndpoints.OpenTelemetry/DynamicEndpoints.OpenTelemetry.csproj",
+            "DynamicEndpoints.PostgreSql/DynamicEndpoints.PostgreSql.csproj",
+            "DynamicEndpoints.Redis/DynamicEndpoints.Redis.csproj",
+            "DynamicEndpoints.Sql/DynamicEndpoints.Sql.csproj",
+            "DynamicEndpoints.Testing/DynamicEndpoints.Testing.csproj",
+            "DynamicEndpoints.Yaml/DynamicEndpoints.Yaml.csproj"
+          ]
+        }
+      ],
+      "dest": "api",
+      "outputFormat": "apiPage",
+      "namespaceLayout": "flattened",
+      "memberLayout": "samePage"
+    }
+  ],
+  "build": {
+    "content": [
+      { "files": [ "index.md", "toc.yml", "articles/**.md", "articles/**/toc.yml", "api/**.{yml,md}" ] }
+    ],
+    "resource": [
+      { "files": [ "images/**" ] }
+    ],
+    "output": "_site",
+    "template": [ "default", "modern" ],
+    "globalMetadata": {
+      "_appName": "DynamicEndpoints",
+      "_appTitle": "DynamicEndpoints",
+      "_appFooter": "DynamicEndpoints – runtime-defined HTTP endpoints for ASP.NET Core. MIT License.",
+      "_enableSearch": true,
+      "_gitContribute": {
+        "repo": "https://github.com/doctorspider42/dotnet-dynamic-endpoints",
+        "branch": "main"
+      }
+    }
+  }
+}

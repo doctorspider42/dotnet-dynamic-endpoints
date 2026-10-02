@@ -44,5 +44,5 @@ DynamicEndpoint.Post("/invoices").FromBody("iban", p => p.Required().ValidatedBy
 
 Custom rules can reach the endpoint definition, the `HttpContext` and the configuration through `ctx.GetDynamicContext()`.
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/validation.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

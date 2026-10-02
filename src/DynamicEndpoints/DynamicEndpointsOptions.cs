@@ -48,6 +48,13 @@ public sealed class DynamicEndpointsOptions
     /// </summary>
     public TimeSpan? RefreshInterval { get; set; }
 
+    /// <summary>
+    /// How often drafts whose <see cref="DynamicEndpointDraft.PublishAt"/> has come are published. Default 10 seconds; <c>null</c>
+    /// turns automatic publishing off (call <see cref="IDynamicEndpointManager.PublishDueAsync"/> from your own scheduler instead).
+    /// With several instances every one checks – a draft is published exactly once.
+    /// </summary>
+    public TimeSpan? ScheduledPublishInterval { get; set; } = TimeSpan.FromSeconds(10);
+
     /// <summary>Identifies this instance in change notifications, so it ignores its own. Unique per process by default.</summary>
     public string InstanceId { get; set; } = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
 
@@ -61,6 +68,9 @@ public sealed class DynamicEndpointsOptions
     public DynamicValidationMessages Messages { get; } = new();
 
     public DynamicEndpointsOpenApiOptions OpenApi { get; } = new();
+
+    /// <summary>Multi-tenancy – switched on by <c>UseMultiTenancy()</c>.</summary>
+    public DynamicEndpointsTenancyOptions Tenancy { get; } = new();
 }
 
 public sealed class DynamicEndpointsOpenApiOptions

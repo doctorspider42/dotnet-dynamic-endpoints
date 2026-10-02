@@ -26,6 +26,8 @@ public enum DynamicErrorKind
     Exception,
     /// <summary>Any other empty error response (4xx/5xx).</summary>
     Other,
+    /// <summary>A rate limit or quota of the endpoint was exceeded (429), or an empty 429 response.</summary>
+    TooManyRequests,
 }
 
 /// <summary>Everything known about an error response that is about to be sent.</summary>

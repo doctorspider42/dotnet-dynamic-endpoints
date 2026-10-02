@@ -14,7 +14,12 @@ internal sealed class TestHost(WebApplication app) : IAsyncDisposable
 {
     public HttpClient Client { get; } = app.GetTestClient();
 
+    public IServiceProvider Services => app.Services;
+
     public IDynamicEndpointManager Manager => app.Services.GetRequiredService<IDynamicEndpointManager>();
+
+    /// <summary>A handler that sends requests to the in-memory server – for clients other than <see cref="Client"/>.</summary>
+    public HttpMessageHandler CreateHandler() => app.GetTestServer().CreateHandler();
 
     public static async Task<TestHost> StartAsync(
         string? sqlitePath = null,

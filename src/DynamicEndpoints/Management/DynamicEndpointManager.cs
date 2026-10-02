@@ -35,19 +35,30 @@ internal sealed class DynamicEndpointManager(
 
     public async Task<IReadOnlyList<DynamicEndpointState>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var definitions = await WithStoreAsync(store => store.GetAllAsync(cancellationToken));
+        var (definitions, drafts) = await WithStoreAsync(async store =>
+        {
+            var definitions = await store.GetAllAsync(cancellationToken);
+            var drafts = store is IDynamicEndpointRevisionStore revisions ? await revisions.GetDraftsAsync(cancellationToken) : [];
+            return (definitions, drafts.ToDictionary(d => d.EndpointId));
+        });
+
         return definitions
-            .OrderBy(d => d.Route, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(d => d.Method, StringComparer.Ordinal)
-            .Select(ToState)
+            .Select(d => ToState(d) with { Draft = drafts.Remove(d.Id, out var draft) ? draft : null })
+            .Concat(drafts.Values.Select(DraftState))
+            .OrderBy(s => s.Definition.Route, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(s => s.Definition.Method, StringComparer.Ordinal)
             .ToList();
     }
 
-    public async Task<DynamicEndpointState?> GetAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        var definition = await WithStoreAsync(store => store.FindAsync(id, cancellationToken));
-        return definition is null ? null : ToState(definition);
-    }
+    public Task<DynamicEndpointState?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithStoreAsync(async store =>
+        {
+            var definition = await store.FindAsync(id, cancellationToken);
+            var draft = store is IDynamicEndpointRevisionStore revisions ? await revisions.FindDraftAsync(id, cancellationToken) : null;
+            return definition is not null ? ToState(definition) with { Draft = draft }
+                : draft is not null ? DraftState(draft)
+                : null;
+        });
 
     public Task<DynamicEndpointDefinition> CreateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default) =>
         WithChangesAsync(changes => changes.CreateAsync(definition, cancellationToken), cancellationToken);
@@ -76,11 +87,105 @@ internal sealed class DynamicEndpointManager(
     public Task<DynamicEndpointDefinition> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default) =>
         WithChangesAsync(changes => changes.SetEnabledAsync(id, enabled, cancellationToken), cancellationToken);
 
+    public Task<DynamicEndpointDraft> SaveDraftAsync(DynamicEndpointDraft draft, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.SaveDraftAsync(draft, cancellationToken), cancellationToken);
+
+    public Task<IReadOnlyList<DynamicEndpointDraft>> ListDraftsAsync(CancellationToken cancellationToken = default) =>
+        WithRevisionsAsync((_, revisions) => revisions.GetDraftsAsync(cancellationToken));
+
+    public Task<DynamicEndpointDraft?> GetDraftAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithRevisionsAsync((_, revisions) => revisions.FindDraftAsync(id, cancellationToken));
+
+    public Task<bool> DiscardDraftAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.DiscardDraftAsync(id, cancellationToken), cancellationToken);
+
+    public Task<DynamicEndpointDefinition> PublishAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.PublishAsync(id, cancellationToken), cancellationToken);
+
+    public async Task<IReadOnlyList<DynamicEndpointDefinition>> PublishDueAsync(CancellationToken cancellationToken = default)
+    {
+        var now = Now;
+        var due = await WithStoreAsync(async store => store is IDynamicEndpointRevisionStore revisions
+            ? (await revisions.GetDraftsAsync(cancellationToken)).Where(d => d.PublishAt <= now).OrderBy(d => d.PublishAt).ToList()
+            : []);
+
+        var published = new List<DynamicEndpointDefinition>();
+        foreach (var draft in due)
+        {
+            try
+            {
+                published.Add(await PublishAsync(draft.EndpointId, cancellationToken));
+                logger.LogInformation("Published the draft of dynamic endpoint {Method} {Route} ({Id}) scheduled for {PublishAt}.",
+                    draft.Definition.Method, draft.Definition.Route, draft.EndpointId, draft.PublishAt);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                if (ex is DynamicEndpointException && await GetDraftAsync(draft.EndpointId, cancellationToken) is null)
+                {
+                    // Another instance was faster.
+                    logger.LogDebug(ex, "The scheduled draft of dynamic endpoint {Id} was already published.", draft.EndpointId);
+                    continue;
+                }
+
+                logger.LogWarning(ex, "The draft of dynamic endpoint {Method} {Route} ({Id}) scheduled for {PublishAt} could not be published.",
+                    draft.Definition.Method, draft.Definition.Route, draft.EndpointId, draft.PublishAt);
+                if (ex is DynamicEndpointException)
+                {
+                    // Invalid or based on an outdated revision – that won't fix itself. Keep the draft, but stop trying.
+                    await WithStoreAsync(async store =>
+                    {
+                        await ((IDynamicEndpointRevisionStore)store).SaveDraftAsync(draft with { PublishAt = null }, cancellationToken);
+                        return true;
+                    });
+                }
+            }
+        }
+
+        return published;
+    }
+
+    public Task<IReadOnlyList<DynamicEndpointRevision>> GetHistoryAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithRevisionsAsync<IReadOnlyList<DynamicEndpointRevision>>(async (store, revisions) =>
+        {
+            var history = await revisions.GetRevisionsAsync(id, cancellationToken);
+            var current = await store.FindAsync(id, cancellationToken);
+
+            // Saved before the history was kept – the published revision is part of the history all the same.
+            return current is not null && !history.Any(r => r.Revision == current.Revision)
+                ? [DynamicEndpointChangeSet.Baseline(current), .. history.Where(r => r.Revision < current.Revision)]
+                : history;
+        });
+
+    public Task<DynamicEndpointRevision?> GetRevisionAsync(Guid id, int revision, CancellationToken cancellationToken = default) =>
+        WithRevisionsAsync((store, revisions) => FindRevisionAsync(store, revisions, id, revision, cancellationToken));
+
+    public Task<DynamicEndpointDefinition> RollbackAsync(Guid id, int revision, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.RollbackAsync(id, revision, cancellationToken), cancellationToken);
+
+    public Task<IReadOnlyList<DynamicEndpointDifference>> DiffAsync(Guid id, int fromRevision, int toRevision, CancellationToken cancellationToken = default) =>
+        WithRevisionsAsync(async (store, revisions) =>
+        {
+            var from = await FindRevisionAsync(store, revisions, id, fromRevision, cancellationToken) ?? throw NoRevision(id, fromRevision);
+            var to = await FindRevisionAsync(store, revisions, id, toRevision, cancellationToken) ?? throw NoRevision(id, toRevision);
+            return DynamicEndpointDiff.Compare(from.Definition, to.Definition);
+        });
+
+    public Task<IReadOnlyList<DynamicEndpointDifference>> DiffDraftAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithRevisionsAsync(async (store, revisions) =>
+        {
+            var draft = await revisions.FindDraftAsync(id, cancellationToken)
+                ?? throw new DynamicEndpointNotFoundException(id, $"Dynamic endpoint '{id}' has no draft.");
+            return DynamicEndpointDiff.Compare(await store.FindAsync(id, cancellationToken), draft.Definition);
+        });
+
     public DynamicEndpointChangeSet BeginChanges(IDynamicEndpointStore store)
     {
         ArgumentNullException.ThrowIfNull(store);
         return new DynamicEndpointChangeSet(this, store);
     }
+
+    internal DynamicEndpointChangeSet BeginChanges(IDynamicEndpointStore store, Func<DynamicEndpointDefinition, DynamicEndpointDefinition> prepare) =>
+        new(this, store, prepare);
 
     public DynamicEndpointChangeSet BeginChanges(IServiceProvider services)
     {
@@ -283,6 +388,30 @@ internal sealed class DynamicEndpointManager(
             logger.LogWarning(ex, "Notifying other instances about dynamic endpoint changes failed; they pick them up on their next refresh.");
         }
     }
+
+    private static DynamicEndpointState DraftState(DynamicEndpointDraft draft) =>
+        new(draft.Definition, DynamicEndpointStatus.Draft, []) { Draft = draft };
+
+    private static async Task<DynamicEndpointRevision?> FindRevisionAsync(
+        IDynamicEndpointStore store, IDynamicEndpointRevisionStore revisions, Guid id, int revision, CancellationToken cancellationToken)
+    {
+        if (await revisions.FindRevisionAsync(id, revision, cancellationToken) is { } found)
+        {
+            return found;
+        }
+
+        return await store.FindAsync(id, cancellationToken) is { } current && current.Revision == revision
+            ? DynamicEndpointChangeSet.Baseline(current)
+            : null;
+    }
+
+    private static DynamicEndpointNotFoundException NoRevision(Guid id, int revision) =>
+        new(id, $"Dynamic endpoint '{id}' has no revision {revision}.");
+
+    private Task<T> WithRevisionsAsync<T>(Func<IDynamicEndpointStore, IDynamicEndpointRevisionStore, Task<T>> action) =>
+        WithStoreAsync(store => store is IDynamicEndpointRevisionStore revisions
+            ? action(store, revisions)
+            : throw DynamicEndpointChangeSet.RevisionsNotSupported());
 
     private DynamicEndpointState ToState(DynamicEndpointDefinition definition)
     {

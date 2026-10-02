@@ -16,10 +16,18 @@ public sealed class DynamicEndpointValidationException(IReadOnlyDictionary<strin
     public IReadOnlyDictionary<string, string[]> Errors { get; } = errors;
 }
 
-public sealed class DynamicEndpointNotFoundException(Guid id)
-    : DynamicEndpointException($"Dynamic endpoint '{id}' does not exist.")
+public sealed class DynamicEndpointNotFoundException : DynamicEndpointException
 {
-    public Guid Id { get; } = id;
+    public DynamicEndpointNotFoundException(Guid id)
+        : this(id, $"Dynamic endpoint '{id}' does not exist.")
+    {
+    }
+
+    /// <summary>Something of the endpoint is missing, e.g. its draft or a revision.</summary>
+    public DynamicEndpointNotFoundException(Guid id, string message)
+        : base(message) => Id = id;
+
+    public Guid Id { get; }
 }
 
 public sealed class DynamicEndpointConcurrencyException(Guid id, int expectedRevision, int? actualRevision)
