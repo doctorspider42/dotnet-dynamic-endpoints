@@ -74,7 +74,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 🏢 **Multi-tenancy** | Endpoints per tenant on the same routes, resolved from a header, host, claim or route prefix. Scoped manager, admin API, drafts, history, export/import and OpenAPI. |
 | 📝 **Audit log** | Who changed what and when, with a property-by-property diff. `ILogger`, in-memory or EF Core, queryable through the admin API. |
 | 🔍 **Analyzers** | Invalid routes, regexes, JsonLogic rules and processor types are reported at build time. |
-| 🧰 **Project template** | `dotnet new dynamic-endpoints`: EF Core SQLite, admin API, Swagger UI, a sample processor and seeder. |
+| 🧰 **Project template** | `dotnet new dynamic-endpoints`: EF Core SQLite, admin API and panel, Swagger UI, a sample processor and seeder. |
 | 🧪 **Test kit** | In-memory store for `WebApplicationFactory` and a ready-made test server. No database needed. |
 | 🪄 **Assembly scanning** | `AddFromAssemblyContaining<Program>()` registers every processor, validator and seeder in one call. |
 | 🖥️ **Admin REST API** | One line, `MapDynamicEndpointsAdmin()`, or build your own on top of `IDynamicEndpointManager`. |
