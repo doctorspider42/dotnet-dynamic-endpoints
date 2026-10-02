@@ -21,6 +21,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
   created, updated (with the changed properties), deleted, left unchanged or skipped. Endpoints are matched by id, or by method and
   route when the file has none. The whole import is validated first, including route conflicts within the file; when anything is
   invalid nothing is written and the response is `422`.
+- **Import from OpenAPI.** `IDynamicEndpointOpenApiImporter` and `POST /import/openapi` turn an OpenAPI 3.x document (JSON, or
+  YAML with `DynamicEndpoints.Yaml`) into endpoint skeletons: routes and methods, path/query/header parameters with types, formats
+  and constraints, JSON and form body properties (`allOf` merged, `$ref`s resolved, files with content types), response schemas
+  and examples, and `requireAuthorization` from `security`. A dry run reports what would be created and, per operation, what
+  couldn't be mapped. Imported endpoints are disabled by default, existing routes are skipped, and options set the processor,
+  a route prefix, the group and a tag filter.
 - **Text formats.** `IDynamicEndpointsTextFormat` – JSON built in; the admin API picks it by `Content-Type`, `?format=` or `Accept`.
 - **`DynamicEndpoints.Yaml`**, a new package: `AddYamlFormat()` adds YAML to export, import and the OpenAPI import;
   `DynamicEndpointsYaml.Parse`/`Write` convert between YAML and `JsonNode`.

@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DynamicEndpoints;
 using DynamicEndpoints.Runtime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -158,6 +160,40 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
             .Accepts<DynamicEndpointExport>("application/json", "application/yaml")
             .Produces<DynamicEndpointImportResult>()
             .Produces<DynamicEndpointImportResult>(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/import/openapi", async Task<IResult> (HttpContext context, bool? dryRun, string? processor, string? routePrefix,
+                string? group, [FromQuery] string[]? tag, bool? enabled, bool? skipInvalid, IDynamicEndpointOpenApiImporter importer,
+                IEnumerable<IDynamicEndpointsTextFormat> formats, CancellationToken ct) =>
+            {
+                OpenApiImportResult result;
+                try
+                {
+                    var text = await ReadBodyAsync(context, ct);
+                    var document = DynamicEndpointsTextFormats.ForContentType(formats, context.Request.ContentType).Parse(text)
+                        ?? throw new FormatException("The document is empty.");
+                    result = await importer.ImportAsync(document, new OpenApiImportOptions
+                    {
+                        DryRun = dryRun ?? false,
+                        Processor = processor,
+                        RoutePrefix = routePrefix,
+                        Group = group,
+                        Tags = tag is { Length: > 0 } ? tag : null,
+                        Enabled = enabled ?? false,
+                        SkipInvalid = skipInvalid ?? false,
+                    }, ct);
+                }
+                catch (FormatException ex)
+                {
+                    return TypedResults.Problem(ex.Message, title: "The OpenAPI document could not be read.", statusCode: StatusCodes.Status400BadRequest);
+                }
+
+                return TypedResults.Json(result, statusCode: result.Succeeded ? StatusCodes.Status200OK : StatusCodes.Status422UnprocessableEntity);
+            })
+            .WithSummary("Creates endpoint skeletons from an OpenAPI 3.x document (JSON, or YAML with DynamicEndpoints.Yaml). ?dryRun=true reports what would be created and what couldn't be mapped.")
+            .Accepts<JsonObject>("application/json", "application/yaml")
+            .Produces<OpenApiImportResult>()
+            .Produces<OpenApiImportResult>(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapPost("/reload", async (IDynamicEndpointManager manager, CancellationToken ct) =>

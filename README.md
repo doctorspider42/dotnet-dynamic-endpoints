@@ -324,6 +324,9 @@ await changes.ApplyAsync(ct);                                       // routing t
 | `GET` | `/processors` · `/validators` | building blocks for the UI |
 | `GET` | `/{id}/snippets?baseUrl=` | example request + curl, HTTPie and C# snippets |
 | `POST` | `/snippets?baseUrl=` | the same for an unsaved definition (editor preview) |
+| `GET` | `/export?id=…&format=json\|yaml` | definitions in the stable export format |
+| `POST` | `/import?mode=create\|upsert\|sync&dryRun=true` | import an export; the dry run is the diff |
+| `POST` | `/import/openapi?processor=&routePrefix=&group=&tag=&enabled=&skipInvalid=&dryRun=` | skeletons from an OpenAPI 3.x document |
 
 It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
 
@@ -332,6 +335,62 @@ the constraints (`Range(5, 100)` → `5`, `Email()` → `user@example.com`, `Min
 property by property). Optional parameters with a default and no example are left out. Documented required headers
 (`o.OpenApi.AddHeader(…, required: true)`) and credentials of the security schemes show up as placeholders (`<api-key>`,
 `Bearer <token>`). `baseUrl` defaults to the address the admin API was called on. In code: `IDynamicEndpointSnippetGenerator`.
+</details>
+
+<details>
+<summary><b>Export, import &amp; GitOps</b></summary>
+
+Keep the definitions in Git, review changes in pull requests and push them from CI:
+
+```bash
+dotnet tool install --global DynamicEndpoints.Cli
+
+dynamic-endpoints export -o endpoints.yaml --url https://api.example.com/api/admin/endpoints --api-key "$ADMIN_KEY"
+dynamic-endpoints diff endpoints.yaml        # exit code 2 when the server differs from the file
+dynamic-endpoints push endpoints.yaml --sync # create, update and delete until the server matches the file
+```
+
+- **Stable format** (`dynamic-endpoints/v1`): sorted by route, method and id, without revisions and timestamps, indented with `\n`
+  line endings. JSON is built in; YAML needs `DynamicEndpoints.Yaml` and `.AddYamlFormat()`.
+- **Modes:** `create` (only new endpoints), `upsert` (default: create and replace) and `sync` (also delete what isn't in the file).
+- **Matching:** by `id`; definitions without one are matched by method and route, so hand-written files work too.
+- **All or nothing:** the whole import is validated first – including route conflicts among the imported endpoints – and nothing
+  is written when any endpoint is invalid (`422`). The dry run (`?dryRun=true`, `diff`) reports per endpoint `Create`, `Update`
+  (with the changed properties), `Delete`, `Unchanged`, `Skip` or `Invalid`.
+- **In code:** `IDynamicEndpointTransfer.ExportAsync(…)` / `ImportAsync(export, new() { Mode = DynamicEndpointImportMode.Sync, DryRun = true })`.
+  Writes go through the registered store one by one; the routing table is updated once at the end.
+</details>
+
+<details>
+<summary><b>Import from OpenAPI</b></summary>
+
+Got a contract first? Turn an OpenAPI 3.x document into endpoint skeletons:
+
+```bash
+curl -X POST "https://api.example.com/api/admin/endpoints/import/openapi?processor=http-forward&routePrefix=/partners&dryRun=true" \
+  -H "Content-Type: application/json" --data-binary @partner-api.json      # YAML with DynamicEndpoints.Yaml
+```
+
+```csharp
+var result = await importer.ImportAsync(document, new OpenApiImportOptions { Processor = "orders", DryRun = true });   // IDynamicEndpointOpenApiImporter
+```
+
+| OpenAPI | Definition |
+|---|---|
+| paths, methods (GET, POST, PUT, PATCH, DELETE), `summary`/`operationId`, `description`, first tag | method, route, name, description, group |
+| path, query and header parameters (path-level ones too) | `Route`, `Query`, `Header` parameters; names like `X-Request-Id` become `xRequestId` bound from the header |
+| `type`, `format` (date, date-time, uuid, email, uri, ipv4, ipv6, time, binary), `enum`, `default`, `example(s)`, `required` | type, format, allowed values, default, example, required |
+| `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, exclusive bounds, `minItems`, `maxItems`, array `items` | constraints, item type |
+| JSON request body properties (`allOf` merged, `$ref`s resolved) | `Body` parameters; nested objects keep their (sanitized) schema |
+| `multipart/form-data` / urlencoded properties, `format: binary`, `encoding.contentType` | `Form` parameters, `File`s with allowed content types |
+| first 2xx JSON response: schema and example | response schema (references inlined) and example |
+| `security` | `requireAuthorization` (empty `security: []` → `allowAnonymous`) |
+
+- **Reported, not guessed:** cookie parameters, `oneOf`/`anyOf`, `multipleOf`, `uniqueItems`, unknown formats, patterns inside
+  object schemas, callbacks, HEAD/OPTIONS/TRACE, non-JSON bodies and the like are listed per operation under `unmapped`.
+- **Safe by default:** imported endpoints are **disabled** (`enabled=true` to change that) until somebody reviewed them, and get
+  the given `processor` (or `DefaultProcessor`). Operations whose method and route already exist are skipped, so re-importing is safe.
+- Every skeleton is validated like any definition. When one is invalid nothing is created (`422`), unless `skipInvalid=true`.
 </details>
 
 <details>
