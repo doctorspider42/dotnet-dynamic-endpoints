@@ -15,6 +15,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
   request built from parameter examples, defaults, allowed values and constraints, plus ready-made curl, HTTPie and C# `HttpClient`
   snippets. Required documented headers and the credentials of the security schemes appear as placeholders. In code:
   `IDynamicEndpointSnippetGenerator`.
+- **Export and import of definitions.** `IDynamicEndpointTransfer` and the admin API's `GET /export` (all, or `?id=…`) write a stable,
+  diff-friendly format (`dynamic-endpoints/v1`: sorted, no revisions or timestamps, `\n` line endings). `POST /import` reads it with
+  `?mode=create|upsert|sync` (`sync` also deletes what is missing) and `?dryRun=true`, which reports per endpoint what would be
+  created, updated (with the changed properties), deleted, left unchanged or skipped. Endpoints are matched by id, or by method and
+  route when the file has none. The whole import is validated first, including route conflicts within the file; when anything is
+  invalid nothing is written and the response is `422`.
+- **Text formats.** `IDynamicEndpointsTextFormat` – JSON built in; the admin API picks it by `Content-Type`, `?format=` or `Accept`.
+- **`DynamicEndpoints.Yaml`**, a new package: `AddYamlFormat()` adds YAML to export, import and the OpenAPI import;
+  `DynamicEndpointsYaml.Parse`/`Write` convert between YAML and `JsonNode`.
 - **Built-in processors** (opt-in, typed configuration validated on save): `AddBuiltInProcessors()` or one by one:
   - `http-forward` (`AddHttpForwardProcessor()`): forwards to another service through `IHttpClientFactory` with a URL template
     (values URL-encoded, no placeholders in the host), headers with `{config:…}` secrets, forwarded request headers, body modes or a

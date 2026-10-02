@@ -44,6 +44,8 @@ public static class DynamicEndpointsServiceCollectionExtensions
         services.TryAddSingleton<IDynamicEndpointManager, DynamicEndpointManager>();
         services.TryAddSingleton<IDynamicOpenApiDocumentProvider, DynamicOpenApiDocumentProvider>();
         services.TryAddSingleton<IDynamicEndpointSnippetGenerator, DynamicEndpointSnippetGenerator>();
+        services.TryAddSingleton<IDynamicEndpointTransfer, DynamicEndpointTransfer>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDynamicEndpointsTextFormat, JsonDynamicEndpointsTextFormat>());
         services.TryAddSingleton<IDynamicEndpointStore, InMemoryDynamicEndpointStore>();
         services.TryAddSingleton<IDynamicErrorResponseFactory, DefaultDynamicErrorResponseFactory>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DynamicEndpointsHostedService>());

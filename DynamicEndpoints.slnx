@@ -9,6 +9,7 @@
     <Project Path="src/DynamicEndpoints.Redis/DynamicEndpoints.Redis.csproj" />
     <Project Path="src/DynamicEndpoints.Sql/DynamicEndpoints.Sql.csproj" />
     <Project Path="src/DynamicEndpoints.Testing/DynamicEndpoints.Testing.csproj" />
+    <Project Path="src/DynamicEndpoints.Yaml/DynamicEndpoints.Yaml.csproj" />
     <Project Path="src/DynamicEndpoints/DynamicEndpoints.csproj" />
   </Folder>
   <Folder Name="/tests/">
