@@ -1,4 +1,5 @@
 using DynamicEndpoints;
+using DynamicEndpoints.EntityFrameworkCore;
 using DynamicEndpoints.Sample;
 using DynamicEndpoints.Sample.Data;
 using DynamicEndpoints.Sample.Demo;
@@ -67,6 +68,15 @@ var dynamicEndpoints = builder.Services
     // Endpoints can belong to a tenant, picked by the X-Tenant header; endpoints without one are shared by all tenants.
     .UseMultiTenancy(tenancy => tenancy.FromHeader("X-Tenant"))
     .UseEntityFrameworkStore<AppDbContext>()
+    // ef-crud: admins build CRUD endpoints on the entities and fields allowlisted here – or scaffold them in the panel.
+    // Products have a tenant column, so every endpoint only sees the rows of its (or the request's) tenant.
+    .AddEntityFrameworkCrud<AppDbContext>(crud => crud
+        .Entity<Product>(e => e                                   // "products" – the DbSet name
+            .Fields(p => p.Id, p => p.Sku, p => p.Name, p => p.Price, p => p.Stock)
+            .ReadOnly(p => p.CreatedAt)
+            .Filterable(p => p.Sku, p => p.Name, p => p.Price)
+            .Sortable(p => p.Name, p => p.Price)
+            .TenantColumn(p => p.TenantId)))
     // Who changed which endpoint and how – logged, and the latest entries at GET /api/admin/endpoints/audit.
     .AddAuditLog(audit => audit.ToLogger().ToMemory());
 
@@ -79,6 +89,9 @@ if (builder.Configuration.GetConnectionString("redis") is { Length: > 0 } redis)
 {
     dynamicEndpoints.UseRedisChangeNotifications(redis);
 }
+
+// Server-side rules of the ef-crud product endpoints: CreatedAt, no negative prices.
+builder.Services.AddScoped<IDynamicCrudInterceptor<Product>, ProductRules>();
 
 // Own feature service that manages dynamic endpoints through the injected IDynamicEndpointManager.
 builder.Services.AddScoped<GreetingEndpointsService>();
