@@ -809,7 +809,9 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
 | `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
 | `DynamicEndpoints.Sql` | read-only, parameterized SQL query processor for any ADO.NET provider |
+| `DynamicEndpoints.Yaml` | YAML for export, import and the OpenAPI import |
 | `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
+| `DynamicEndpoints.Cli` | `dynamic-endpoints` .NET tool: list, export, diff, push, import-openapi – GitOps from CI |
 
 ## 🧪 Sample app
 
@@ -855,6 +857,8 @@ src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
 src/DynamicEndpoints.Sql                   read-only SQL query processor
+src/DynamicEndpoints.Yaml                  YAML text format
+src/DynamicEndpoints.Cli                   dynamic-endpoints .NET tool
 src/DynamicEndpoints.Testing               test helpers
 samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
@@ -889,6 +893,8 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
 | `DynamicEndpoints.Redis` | [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) (MIT) |
 | `DynamicEndpoints.Sql` | ASP.NET Core shared framework only (bring your ADO.NET provider) |
+| `DynamicEndpoints.Yaml` | [YamlDotNet](https://github.com/aaubry/YamlDotNet) (MIT) |
+| `DynamicEndpoints.Cli` | `DynamicEndpoints.Yaml` |
 | `DynamicEndpoints.Testing` | `Microsoft.AspNetCore.Mvc.Testing` (MIT) |
 
 ## 🤝 Contributing

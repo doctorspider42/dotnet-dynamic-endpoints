@@ -21,6 +21,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
   created, updated (with the changed properties), deleted, left unchanged or skipped. Endpoints are matched by id, or by method and
   route when the file has none. The whole import is validated first, including route conflicts within the file; when anything is
   invalid nothing is written and the response is `422`.
+- **`DynamicEndpoints.Cli`**, a new .NET tool (`dynamic-endpoints`) for GitOps through the admin API: `list`, `export` (JSON or
+  YAML by file extension), `push`/`import` (`--mode create|upsert|sync`, `--sync`, `--dry-run`), `diff` and `import-openapi`.
+  Credentials via `--api-key`/`--api-key-header`, `--token`, `-H` or `DYNAMIC_ENDPOINTS_*` environment variables; exit codes
+  0 (success), 1 (rejected, nothing written), 2 (`diff` found differences), 3 (usage), 4 (connection/HTTP error); `--json` output.
 - **Import from OpenAPI.** `IDynamicEndpointOpenApiImporter` and `POST /import/openapi` turn an OpenAPI 3.x document (JSON, or
   YAML with `DynamicEndpoints.Yaml`) into endpoint skeletons: routes and methods, path/query/header parameters with types, formats
   and constraints, JSON and form body properties (`allOf` merged, `$ref`s resolved, files with content types), response schemas
