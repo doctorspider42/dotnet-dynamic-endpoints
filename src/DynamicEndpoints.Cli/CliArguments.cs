@@ -22,7 +22,7 @@ internal sealed class CliArguments
 
     private static readonly HashSet<string> Flags = new(StringComparer.Ordinal)
     {
-        "--help", "--version", "--sync", "--dry-run", "--json", "--enabled", "--skip-invalid", "--verbose",
+        "--help", "--version", "--sync", "--dry-run", "--json", "--enabled", "--skip-invalid", "--verbose", "--mock",
     };
 
     private readonly Dictionary<string, List<string>> _options = new(StringComparer.Ordinal);
