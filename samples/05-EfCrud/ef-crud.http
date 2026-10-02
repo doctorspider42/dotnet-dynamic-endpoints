@@ -1,0 +1,69 @@
+# samples/05-EfCrud – start it with: dotnet run --project samples/05-EfCrud
+@baseUrl = http://localhost:5105
+
+### Scaffolded list – sorted, paged, only the allowlisted fields
+GET {{baseUrl}}/shop/products?sort=-price&page=1&pageSize=10
+
+### Filters generated from the filterable fields
+GET {{baseUrl}}/shop/products?maxPrice=20&sort=name
+
+### 400 – stock isn't sortable
+GET {{baseUrl}}/shop/products?sort=stock
+
+### Create – "id" and "purchasePrice" are ignored (no mass assignment)
+# @name created
+POST {{baseUrl}}/shop/products
+Content-Type: application/json
+
+{ "sku": "TNT-5", "name": "Dynamite", "price": 9.5, "stock": 100, "id": 999, "purchasePrice": 1 }
+
+### 400 from the interceptor
+POST {{baseUrl}}/shop/products
+Content-Type: application/json
+
+{ "sku": "NEG-1", "name": "Debt", "price": -1, "stock": 1 }
+
+### Patch – only the fields sent
+PATCH {{baseUrl}}/shop/products/{{created.response.body.id}}
+Content-Type: application/json
+
+{ "name": "TNT" }
+
+### Delete
+DELETE {{baseUrl}}/shop/products/{{created.response.body.id}}
+
+### Get with its ETag
+# @name product
+GET {{baseUrl}}/shop/products/1
+
+### 428 – this endpoint requires If-Match
+PATCH {{baseUrl}}/shop/products/1/stock
+Content-Type: application/json
+
+{ "stock": 5 }
+
+### 412 – a stale ETag
+PATCH {{baseUrl}}/shop/products/1/stock
+Content-Type: application/json
+If-Match: "stale"
+
+{ "stock": 5 }
+
+### 200 – the current ETag (copy it from the get above if your client doesn't support response headers)
+PATCH {{baseUrl}}/shop/products/1/stock
+Content-Type: application/json
+If-Match: {{product.response.headers.ETag}}
+
+{ "stock": 5 }
+
+### Hand-written list with a contains filter
+GET {{baseUrl}}/shop/categories?q=ool
+
+###
+GET {{baseUrl}}/shop/categories/1
+
+### The entities admins may use
+GET {{baseUrl}}/api/admin/endpoints/crud/entities
+
+### Scaffolding through the admin API – a dry run
+POST {{baseUrl}}/api/admin/endpoints/scaffold/crud?entity=categories&routePrefix=/catalog/categories&dryRun=true
