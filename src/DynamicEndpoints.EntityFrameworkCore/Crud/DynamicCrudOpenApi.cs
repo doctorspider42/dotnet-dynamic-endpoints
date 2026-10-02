@@ -129,6 +129,27 @@ internal sealed class DynamicCrudOpenApi(IServiceProvider services) : IPostConfi
             }
         }
 
+        // A shared endpoint of tenant data takes the tenant from the request; without it the request is rejected.
+        if (definition.Tenant is null && entity.Tenant is not null && DynamicCrudTenancy.HeaderName(services) is { } tenantHeader)
+        {
+            var parameters = operation["parameters"] as JsonArray ?? [];
+            if (!parameters.Any(p => p?["in"]?.GetValue<string>() == "header"
+                    && string.Equals(p["name"]?.GetValue<string>(), tenantHeader, StringComparison.OrdinalIgnoreCase)))
+            {
+                parameters.Add(new JsonObject
+                {
+                    ["name"] = tenantHeader,
+                    ["in"] = "header",
+                    ["required"] = true,
+                    ["description"] = "Tenant whose data the request works on.",
+                    ["schema"] = new JsonObject { ["type"] = "string" },
+                });
+                operation["parameters"] = parameters.DeepClone();
+            }
+
+            responses["404"] ??= Problem("Not found, or the request has no tenant");
+        }
+
         var extension = operation["x-dynamic-endpoint"] as JsonObject;
         if (extension is not null)
         {

@@ -14,8 +14,12 @@ internal static class DynamicCrudResults
     public static IResult NotFound(DynamicRequest request) =>
         Create(request, DynamicErrorKind.NotFound, StatusCodes.Status404NotFound, Title(request, "title.notFound"));
 
+    // Shared endpoints of tenant data take the tenant from the request – say how to send it.
     public static IResult NoTenant(DynamicRequest request) =>
-        Create(request, DynamicErrorKind.NotFound, StatusCodes.Status404NotFound, "The request has no tenant.");
+        Create(request, DynamicErrorKind.NotFound, StatusCodes.Status404NotFound,
+            DynamicCrudTenancy.HeaderName(request.Services) is { } header
+                ? $"The request has no tenant. This endpoint works on the data of a tenant: send the '{header}' header."
+                : "The request has no tenant. This endpoint works on the data of a tenant.");
 
     public static IResult PreconditionFailed(DynamicRequest request) =>
         Create(request, DynamicErrorKind.Other, StatusCodes.Status412PreconditionFailed, "The entity was changed – If-Match doesn't match its current ETag.");
@@ -45,4 +49,11 @@ internal static class DynamicCrudResults
 
     private static string Title(DynamicRequest request, string key) =>
         request.Services.GetRequiredService<IOptions<DynamicEndpointsOptions>>().Value.Messages.Format(ErrorMessage.Of(key, string.Empty));
+}
+
+internal static class DynamicCrudTenancy
+{
+    /// <summary>The header of the first <see cref="HeaderTenantResolver"/>, when the tenant can come from a header.</summary>
+    public static string? HeaderName(IServiceProvider services) =>
+        services.GetServices<IDynamicEndpointTenantResolver>().OfType<HeaderTenantResolver>().FirstOrDefault()?.HeaderName;
 }

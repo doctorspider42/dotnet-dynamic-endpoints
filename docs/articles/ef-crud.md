@@ -169,6 +169,11 @@ All errors are built by the [error response factory](error-responses.md), like t
 
 ## Multi-tenancy
 
+**Optional.** Without `UseMultiTenancy()` and without `TenantColumn` nothing here applies: the rows are simply shared and
+requests need no tenant – the quickest way to expose an entity. A `TenantColumn` without `UseMultiTenancy()` fails the start
+(no request would ever have a tenant). With multi-tenancy on, leave `TenantColumn` out of entities whose rows aren't owned by a
+tenant.
+
 ```csharp
 .Entity<Product>(e => e.Fields(…).TenantColumn(p => p.TenantId))       // rows belong to tenants
 .Entity<Country>(e => e.AllFields().SharedAcrossTenants())             // reference data, the same for everyone
@@ -181,7 +186,8 @@ All errors are built by the [error response factory](error-responses.md), like t
 - **Which tenant:** the endpoint's own tenant for a tenant's endpoints; the tenant the request was resolved to for shared
   endpoints (`DynamicRequest.Tenant`). A tenant's endpoint is only routed for requests of its tenant, so it never sees other
   tenants' rows; a shared endpoint serves every tenant with that tenant's rows. A request **without** a tenant gets `404` (`The
-  request has no tenant.`) – it never sees all rows.
+  request has no tenant…`, naming the header when the tenant comes from one) – it never sees all rows. The OpenAPI document lists
+  that header as required on such shared endpoints, so Swagger UI can send it.
 - **Entities without a tenant column** are for shared endpoints only – a tenant's admin can't read or change the application's
   data – unless `SharedAcrossTenants()` (every tenant, same rows) or `AllowTenants(…)` (these tenants) allows it. On an entity with
   a tenant column, `AllowTenants` narrows the tenants that may use it.

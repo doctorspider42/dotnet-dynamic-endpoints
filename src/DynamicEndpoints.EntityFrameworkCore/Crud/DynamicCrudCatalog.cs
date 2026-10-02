@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace DynamicEndpoints.EntityFrameworkCore;
 
@@ -37,6 +38,7 @@ internal sealed class DynamicCrudCatalog
         var entities = new Dictionary<string, DynamicCrudEntity>(StringComparer.OrdinalIgnoreCase);
         var errors = new List<string>();
         using var scope = scopeFactory.CreateScope();
+        var tenancy = scope.ServiceProvider.GetRequiredService<IOptions<DynamicEndpointsOptions>>().Value.Tenancy.Enabled;
         foreach (var registration in registrations)
         {
             var context = (DbContext)scope.ServiceProvider.GetRequiredService(registration.ContextType);
@@ -50,6 +52,12 @@ internal sealed class DynamicCrudCatalog
 
                 var entity = options.Create(entityType, registration);
                 errors.AddRange(entity.Errors.Select(e => $"'{options.Name}' ({options.ClrType.Name}): {e}"));
+
+                // Without multi-tenancy no request has a tenant, so every request to the entity would be rejected.
+                if (entity.Tenant is not null && !tenancy)
+                {
+                    errors.Add($"'{options.Name}' ({options.ClrType.Name}): TenantColumn needs multi-tenancy – call UseMultiTenancy(…), or remove TenantColumn to share the rows.");
+                }
                 if (!entities.TryAdd(entity.Name, entity))
                 {
                     errors.Add($"The entity name '{entity.Name}' is used by more than one AddEntityFrameworkCrud registration.");

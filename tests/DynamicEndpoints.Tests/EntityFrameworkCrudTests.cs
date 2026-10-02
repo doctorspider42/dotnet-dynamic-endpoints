@@ -508,6 +508,57 @@ public sealed class EntityFrameworkCrudTests : IDisposable
         Assert.NotNull(product["delete"]!["responses"]!["204"]);
         Assert.NotNull(product["delete"]!["responses"]!["412"]);
         Assert.Equal("string", (string?)product["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["properties"]!["status"]!["type"]);
+
+        // Shared endpoints of an entity with a tenant column need the request's tenant; entities without one don't.
+        var tenantHeader = Assert.Single(product["get"]!["parameters"]!.AsArray(), p => (string?)p!["name"] == "X-Tenant-Id")!;
+        Assert.Equal("header", (string?)tenantHeader["in"]);
+        Assert.True((bool)tenantHeader["required"]!);
+        Assert.Contains(document["paths"]!["/products"]!["post"]!["parameters"]!.AsArray(), p => (string?)p!["name"] == "X-Tenant-Id");
+        Assert.DoesNotContain(paths["/orders"]!["get"]!["parameters"]?.AsArray() ?? [], p => (string?)p!["name"] == "X-Tenant-Id");
+    }
+
+    [Fact]
+    public async Task A_tenant_column_without_multi_tenancy_fails_at_start_and_without_one_no_tenant_is_needed()
+    {
+        var failed = await Assert.ThrowsAsync<InvalidOperationException>(() => TestHost.StartAsync(configure: b =>
+        {
+            b.Services.AddDbContext<CrudDbContext>(o => o.UseSqlite(ConnectionString));
+            b.AddEntityFrameworkCrud<CrudDbContext>(crud => crud.Entity<CrudProduct>(e => e.AllFields().TenantColumn(p => p.TenantId)));
+        }));
+        Assert.Contains("UseMultiTenancy", failed.Message);
+
+        // The quick way: no tenancy, no tenant column – the rows are simply shared.
+        await using var host = await TestHost.StartAsync(
+            configure: b =>
+            {
+                b.Services.AddDbContext<CrudDbContext>(o => o.UseSqlite(ConnectionString));
+                b.AddEntityFrameworkCrud<CrudDbContext>(crud => crud.Entity<CrudProduct>(e => e.AllFields(except: p => p.TenantId)));
+            },
+            configureApp: app =>
+            {
+                using var scope = app.Services.CreateScope();
+                scope.ServiceProvider.GetRequiredService<CrudDbContext>().Database.EnsureCreated();
+            });
+        await host.Services.GetRequiredService<IDynamicCrudScaffolder>().ScaffoldAsync("products", new() { Enabled = true, RoutePrefix = "/products" });
+
+        var created = await host.Client.PostAsJsonAsync("/products", new { sku = "Q", name = "Quick", price = 1, stock = 1, status = "Active" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Contains("Quick", await host.Client.GetStringAsync("/products"));
+    }
+
+    [Fact]
+    public async Task A_shared_endpoint_of_tenant_data_tells_how_to_send_the_tenant()
+    {
+        await using var host = await StartAsync();
+        await host.Manager.CreateAsync(DynamicEndpoint.Post("/products").HandledByCrud<CrudProduct>(CrudOperation.Create)
+            .FromBody("sku", p => p.Required()).FromBody("name", p => p.Required()));
+
+        var response = await host.Client.PostAsJsonAsync("/products", new { sku = "X", name = "X" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonObject>();
+        Assert.Contains("'X-Tenant-Id' header", (string?)problem!["title"]);
+        Assert.Equal(0, await QueryAsync(host, db => db.Set<CrudProduct>().CountAsync()));
     }
 
     [Fact]
