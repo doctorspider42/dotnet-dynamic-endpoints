@@ -9,6 +9,49 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Metrics and tracing per dynamic endpoint**, with `System.Diagnostics` only (the core still has no dependencies). The meter
+  `DynamicEndpoints` has `dynamic_endpoints.requests` (with outcome and status code), `dynamic_endpoints.request.duration`,
+  `dynamic_endpoints.validation.failures` (by layer: binding, constraints, parameter validators, rules, request validators),
+  `dynamic_endpoints.processor.duration` and `dynamic_endpoints.errors`, all tagged with the endpoint's id, name, processor,
+  route and method. The activity source `DynamicEndpoints` adds spans for the request, filters, binding, every validation layer
+  and the processor. Names are constants in `DynamicEndpointsTelemetry`.
+- **Drafts, history and rollback.** `SaveDraftAsync` saves a validated change (or a new endpoint) that isn't routed until
+  `PublishAsync`, or until its `PublishAt` time (`options.ScheduledPublishInterval`, 10 s by default; `PublishDueAsync()` for your own
+  scheduler). Every change is kept as a revision with its kind and comment: `GetHistoryAsync`, `GetRevisionAsync`,
+  `DiffAsync(id, from, to)`, `DiffDraftAsync` and `RollbackAsync(id, revision)`, which publishes old content as the next revision.
+  Publishing an outdated draft fails with a concurrency error. `DynamicEndpointDiff.Compare` compares any two definitions. Change sets
+  support drafts, publishing and rollbacks too. The admin API has `/drafts`, `/{id}/draft`, `/{id}/publish`, `/{id}/revisions`,
+  `/{id}/diff` and `/{id}/revisions/{revision}/rollback`.
+- `IDynamicEndpointRevisionStore`: the optional store capability behind it, implemented by the in-memory store (and so by
+  `DynamicEndpoints.Testing`) and the EF Core store. The bundled `DynamicEndpointsDbContext` gets the migration
+  `DynamicEndpointRevisionsAndDrafts` (provider-independent, adopted for databases created with `EnsureCreated`).
+- **Admin panel as a package.** `DynamicEndpoints.AdminUI` serves the panel from embedded files:
+  `app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints")` returns a `RouteGroupBuilder`, so
+  `.RequireAuthorization()` works. It reserves its prefix, follows the path base and takes a title and Swagger / OpenAPI links.
+  Besides the list and the editor, it has drafts with scheduled publishing, history with diffs and rollback, and the "Try"
+  console generates example values from the parameters (examples, defaults, allowed values, formats, lengths, ranges, JSON
+  Schemas) and copies requests as curl, HTTPie or C# `HttpClient` code. The sample uses the package instead of its own `wwwroot`.
+- `DynamicEndpoints.OpenTelemetry` package: `AddDynamicEndpointsInstrumentation()` for `MeterProviderBuilder` and `TracerProviderBuilder`.
+- **.NET Aspire sample.** `samples/DynamicEndpoints.AppHost` runs the sample in two replicas on PostgreSQL with Redis change
+  notifications, and `samples/DynamicEndpoints.ServiceDefaults` sends the per-endpoint metrics and traces to the Aspire dashboard.
+  The sample picks PostgreSQL and Redis up from the `dynamicendpoints` and `redis` connection strings.
+- **Container for a live demo.** `samples/DynamicEndpoints.Sample/Dockerfile` and `samples/docker-compose.yml` (two instances,
+  PostgreSQL, Redis, nginx). A demo mode (`Demo__Enabled`) adds a rate limit per client and resets the endpoints every hour.
+
+### Changed
+
+- `IDynamicEndpointManager` has new members for drafts, history and rollback. Your own implementations of the interface (e.g.
+  decorators) need them too.
+- **EF Core, your own DbContext:** `ApplyDynamicEndpointsConfiguration()` also maps `DynamicEndpointRevisions` and
+  `DynamicEndpointDrafts`. Add a migration for them, or pass `history: false` to keep the 0.3 model without history and drafts.
+  Contexts that map only `DynamicEndpointRecordConfiguration` keep working unchanged.
+- `ListAsync` and `GetAsync` also return never-published drafts, with the new status `DynamicEndpointStatus.Draft`.
+  `DynamicEndpointState.Draft` carries the draft of an endpoint.
+- The admin API answers `501` when the store keeps no history and drafts.
+- `DynamicEndpoints.Testing`: scheduled publishing is off in the in-memory setup, so call `PublishDueAsync()` in tests.
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

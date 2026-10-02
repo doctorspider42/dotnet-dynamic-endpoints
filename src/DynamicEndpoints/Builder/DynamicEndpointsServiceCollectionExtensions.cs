@@ -1,4 +1,5 @@
 using DynamicEndpoints;
+using DynamicEndpoints.Diagnostics;
 using DynamicEndpoints.Hosting;
 using DynamicEndpoints.Management;
 using DynamicEndpoints.Processing;
@@ -37,6 +38,8 @@ public static class DynamicEndpointsServiceCollectionExtensions
         services.TryAddSingleton<DynamicEndpointConventions>();
         services.TryAddSingleton<ParameterBinder>();
         services.TryAddSingleton<DynamicRequestHandler>();
+        services.AddMetrics();
+        services.TryAddSingleton<DynamicEndpointsInstrumentation>();
         services.TryAddSingleton<DynamicEndpointCompiler>();
         services.TryAddSingleton<DynamicEndpointRuntime>();
         services.TryAddSingleton<IDynamicEndpointManager, DynamicEndpointManager>();

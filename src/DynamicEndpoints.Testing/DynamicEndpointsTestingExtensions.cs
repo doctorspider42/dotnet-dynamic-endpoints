@@ -8,8 +8,9 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class DynamicEndpointsTestingExtensions
 {
     /// <summary>
-    /// Swaps the persistence of dynamic endpoints for an in-memory store (no database needed): removes store initializers
-    /// (e.g. migrations), change notifiers and polling. Call it after the application's own registrations, e.g. in
+    /// Swaps the persistence of dynamic endpoints for an in-memory store with history and drafts (no database needed): removes
+    /// store initializers (e.g. migrations), change notifiers, polling and the scheduled publishing of drafts (call
+    /// <see cref="IDynamicEndpointManager.PublishDueAsync"/> instead). Call it after the application's own registrations, e.g. in
     /// <c>ConfigureTestServices</c>. Pass a <paramref name="store"/> to share it between hosts or to inspect it.
     /// </summary>
     public static IDynamicEndpointsBuilder UseInMemoryDynamicEndpoints(this IServiceCollection services, InMemoryDynamicEndpointStore? store = null)
@@ -18,7 +19,11 @@ public static class DynamicEndpointsTestingExtensions
         services.Replace(ServiceDescriptor.Singleton<IDynamicEndpointStore>(store ?? new InMemoryDynamicEndpointStore()));
         services.RemoveAll<IDynamicEndpointStoreInitializer>();
         services.RemoveAll<IDynamicEndpointChangeNotifier>();
-        services.PostConfigure<DynamicEndpointsOptions>(o => o.RefreshInterval = null);
+        services.PostConfigure<DynamicEndpointsOptions>(o =>
+        {
+            o.RefreshInterval = null;
+            o.ScheduledPublishInterval = null; // deterministic: tests call IDynamicEndpointManager.PublishDueAsync()
+        });
         return new TestBuilder(services);
     }
 

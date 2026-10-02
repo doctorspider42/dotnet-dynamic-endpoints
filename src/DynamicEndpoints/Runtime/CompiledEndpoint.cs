@@ -41,6 +41,9 @@ internal sealed class CompiledEndpoint
     public DynamicEndpointMetadata Metadata => _metadata ??= new DynamicEndpointMetadata(Definition, ProcessorName);
 
     public ConcurrentDictionary<Type, object?> ConfigurationCache { get; } = new();
+
+    /// <summary>Tags of the endpoint's metrics and activities, built on first use.</summary>
+    public KeyValuePair<string, object?>[]? TelemetryTags { get; set; }
 }
 
 internal sealed record CompiledParameter(ParameterDefinition Definition, Regex? Pattern)

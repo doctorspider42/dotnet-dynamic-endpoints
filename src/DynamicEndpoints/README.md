@@ -18,6 +18,8 @@ validated on save, persisted, and documented as OpenAPI 3.1.
 - 🛡️ **Validation:** JSON Schema constraints, built-in formats (e-mail, URI, phone, IP, time), JsonLogic business rules and custom validators.
 - 🪝 **Filters:** access checks before validation, your own error format, logging and metering of rejected requests.
 - 🌍 **Localized errors:** English and Polish built in, overridable texts, stable error codes.
+- 📝 **Drafts & history:** publish changes now or at a set time, diff revisions, roll back.
+- 📈 **Metrics & tracing:** per-endpoint requests, validation failures by layer, processor duration and spans via `System.Diagnostics`.
 - ⚙️ **Processors:** validated input goes to your own, statically typed code with full DI.
 - 📜 **OpenAPI 3.1:** generated from the definitions, ready for Swagger UI, with security schemes, common headers and hooks.
 - 🔐 **First-class endpoints:** authorization policies, rate limiting and conventions work as usual.
@@ -66,8 +68,9 @@ The default store is in-memory. For persistence add
 [DynamicEndpoints.EntityFrameworkCore](https://www.nuget.org/packages/DynamicEndpoints.EntityFrameworkCore).
 For FluentValidation support add [DynamicEndpoints.FluentValidation](https://www.nuget.org/packages/DynamicEndpoints.FluentValidation).
 For instant propagation across instances add [DynamicEndpoints.PostgreSql](https://www.nuget.org/packages/DynamicEndpoints.PostgreSql)
-(`LISTEN/NOTIFY`) or [DynamicEndpoints.Redis](https://www.nuget.org/packages/DynamicEndpoints.Redis) (pub/sub), and for tests
-[DynamicEndpoints.Testing](https://www.nuget.org/packages/DynamicEndpoints.Testing).
+(`LISTEN/NOTIFY`) or [DynamicEndpoints.Redis](https://www.nuget.org/packages/DynamicEndpoints.Redis) (pub/sub), for tests
+[DynamicEndpoints.Testing](https://www.nuget.org/packages/DynamicEndpoints.Testing), and for OpenTelemetry
+[DynamicEndpoints.OpenTelemetry](https://www.nuget.org/packages/DynamicEndpoints.OpenTelemetry).
 
 ## Learn more
 

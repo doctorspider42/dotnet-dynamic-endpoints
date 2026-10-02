@@ -15,8 +15,8 @@ await factory.AddDynamicEndpointAsync(DynamicEndpoint.Get("/customers/{id}").Han
 var response = await factory.CreateClient().GetAsync("/customers/1");
 ```
 
-`WithInMemoryDynamicEndpoints` swaps the store for an in-memory one. It also removes store initializers (migrations), change
-notifiers and polling. Your seeders still run, against the in-memory store. In your own `ConfigureTestServices` it's
+`WithInMemoryDynamicEndpoints` swaps the store for an in-memory one, with history and drafts. It also removes store initializers
+(migrations), change notifiers, polling and scheduled publishing: call `manager.PublishDueAsync()` to publish due drafts. Your seeders still run, against the in-memory store. In your own `ConfigureTestServices` it's
 `services.UseInMemoryDynamicEndpoints()`.
 
 ## Just your processors and validators

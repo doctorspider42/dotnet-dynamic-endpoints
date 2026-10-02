@@ -51,6 +51,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | | |
 |---|---|
 | 🔥 **Hot endpoints** | Add, change, disable and delete endpoints at runtime. Routing swaps atomically, so a request never sees a half-applied state. |
+| 📝 **Drafts & history** | Save a change as a draft, publish it now or at a set time. Every revision is kept: diff any two, roll back with one call. |
 | 💾 **Persistent** | Stored with EF Core (any provider) and loaded on start-up. Optimistic concurrency, ready-made migrations, and saving in *your* transaction. |
 | 🧩 **Declarative binding** | Route, query, header, JSON body and form parameters with types, defaults and request names (`X-Tenant-Id` → `tenantId`). |
 | 📎 **File uploads** | `multipart/form-data` with size and content-type limits, streamed by ASP.NET Core. No base64, documented as binary in OpenAPI. |
@@ -66,9 +67,11 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 🚦 **Safe by design** | No code execution, ReDoS-proof regexes, body and depth limits, reserved prefixes, conflict detection. |
 | 🌐 **Multi-instance** | Instant propagation through PostgreSQL `LISTEN/NOTIFY` or Redis pub/sub, with polling as the fallback. |
 | 📣 **Change events** | Created / updated / deleted handlers for audit logs and cache invalidation. |
+| 📈 **Metrics & tracing** | Requests, validation failures by layer, processor duration and errors per endpoint, plus spans for binding, every validation layer and the processor. Plain `System.Diagnostics`, ready for OpenTelemetry. |
 | 🧪 **Test kit** | In-memory store for `WebApplicationFactory` and a ready-made test server. No database needed. |
 | 🪄 **Assembly scanning** | `AddFromAssemblyContaining<Program>()` registers every processor, validator and seeder in one call. |
 | 🖥️ **Admin REST API** | One line, `MapDynamicEndpointsAdmin()`, or build your own on top of `IDynamicEndpointManager`. |
+| 🎛️ **Admin panel** | `MapDynamicEndpointsAdminUI()`: editor, drafts, history with diffs and rollback, and a "Try" console that writes curl, HTTPie and C# for you. |
 | ✅ **Tested** | Integration tests run on TestServer + SQLite, and on real PostgreSQL and Redis containers: persistence, migrations, multiple instances, concurrency. |
 
 ## 🚀 Quick start
@@ -77,6 +80,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 dotnet add package DynamicEndpoints
 dotnet add package DynamicEndpoints.EntityFrameworkCore   # persistence
 dotnet add package DynamicEndpoints.FluentValidation      # optional
+dotnet add package DynamicEndpoints.AdminUI               # optional: the admin panel
 ```
 
 ```csharp
@@ -93,6 +97,8 @@ var app = builder.Build();
 
 app.MapDynamicEndpoints();                                         // 🔥 the dynamic routes
 app.MapDynamicEndpointsAdmin("/api/admin/endpoints")               // 🖥️ management API
+   .RequireAuthorization("admin");
+app.MapDynamicEndpointsAdminUI("/admin", "/api/admin/endpoints")   // 🎛️ admin panel (DynamicEndpoints.AdminUI)
    .RequireAuthorization("admin");
 app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");           // 📜 OpenAPI 3.1
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/openapi/dynamic.json", "Dynamic API"));
@@ -282,7 +288,42 @@ await manager.ReloadAsync();                                           // re-rea
 `UpsertAsync` is made for syncing definitions from your own model: it creates the endpoint, or replaces the stored one with the same
 `Id` whatever its revision. Nothing is written (and the revision stays) when the content didn't change.
 
+Drafts, history and rollback are on the manager too, see *Drafts, history &amp; rollback* below.
+
 The sample's `Greetings/` folder shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.
+</details>
+
+<details>
+<summary><b>Drafts, history &amp; rollback</b></summary>
+
+A change doesn't have to go live right away. Save it as a **draft**: it's validated like any definition, but routing keeps
+serving the published revision until you publish the draft, by hand or at a set time.
+
+```csharp
+var draft = await manager.SaveDraftAsync(current with { Route = "/v2/orders" });   // based on current.Revision
+await manager.SaveDraftAsync(DynamicEndpoint.Get("/promo").HandledBy("echo"),      // a new endpoint, drafted…
+    publishAt: new DateTimeOffset(2026, 12, 24, 18, 0, 0, TimeSpan.Zero), comment: "Christmas promo");   // …and scheduled
+var changes = await manager.DiffDraftAsync(draft.EndpointId);                      // what publishing would change
+await manager.PublishAsync(draft.EndpointId);                                      // live – as the next revision
+
+var history = await manager.GetHistoryAsync(id);                                   // every revision, newest first
+var diff = await manager.DiffAsync(id, fromRevision: 3, toRevision: 5);            // [{ path: "parameters[quantity].maximum", kind: "Changed", from: 10, to: 100 }]
+await manager.RollbackAsync(id, revision: 3);                                      // revision 3's content as revision 6
+```
+
+- **History:** every create, update, enable/disable, publish and rollback is a revision with its kind and comment. A rollback
+  adds a revision instead of rewriting history. Deleting an endpoint deletes its history and draft.
+- **Drafts:** at most one per endpoint. `ListAsync` shows them (`state.Draft`), and never-published endpoints have the status
+  `Draft`. A draft remembers the revision it's based on (`BaseRevision`). If someone changed the endpoint in the meantime,
+  publishing fails with a `409` / `DynamicEndpointConcurrencyException`, so save the draft again on top of the current revision.
+- **Scheduled publishing:** drafts with `PublishAt` are published every `options.ScheduledPublishInterval` (10 s), exactly once
+  across instances. A draft that can't be published any more (e.g. its route is taken) is logged and unscheduled. Call
+  `PublishDueAsync()` from your own scheduler if you turn the interval off.
+- **Diffs** address parameters and validators by name (`parameters[quantity].maximum`), so inserting one doesn't make
+  everything look changed. `DynamicEndpointDiff.Compare(a, b)` compares any two definitions.
+- **Transactions:** change sets have `SaveDraftAsync`, `PublishAsync`, `RollbackAsync` and `DiscardDraftAsync` too.
+- **Stores:** the in-memory and EF Core stores keep history and drafts. A custom store opts in by implementing
+  `IDynamicEndpointRevisionStore`, and without it these calls throw `NotSupportedException` (`501` in the admin API).
 </details>
 
 <details>
@@ -321,8 +362,38 @@ await changes.ApplyAsync(ct);                                       // routing t
 | `POST` | `/validate` | dry run |
 | `POST` | `/reload` | re-read the store |
 | `GET` | `/processors` · `/validators` | building blocks for the UI |
+| `GET` · `POST` | `/drafts` | all drafts · draft a new endpoint |
+| `GET` · `PUT` · `DELETE` | `/{id}/draft` | the draft of an endpoint (`{ definition, publishAt, comment }`) |
+| `GET` | `/{id}/draft/diff` | what publishing would change |
+| `POST` | `/{id}/publish` | publish the draft |
+| `GET` | `/{id}/revisions` · `/{id}/revisions/{revision}` | history |
+| `GET` | `/{id}/diff?from=3&to=5` | differences between revisions (`to` defaults to the published one) |
+| `POST` | `/{id}/revisions/{revision}/rollback` | roll back |
 
 It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
+</details>
+
+<details>
+<summary><b>Admin panel: <code>MapDynamicEndpointsAdminUI()</code></b></summary>
+
+The `DynamicEndpoints.AdminUI` package serves the panel from embedded files, with no static files middleware and no dependencies:
+
+```csharp
+app.MapDynamicEndpointsAdmin("/api/admin/endpoints").RequireAuthorization("admin");
+app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints", o =>
+{
+    o.Title = "Orders API – endpoints";
+    o.SwaggerUrl = "/swagger";
+    o.OpenApiUrl = "/openapi/dynamic.json";
+}).RequireAuthorization("admin");
+```
+
+- **List & editor:** everything a definition has, with *Validate*, *Save draft* (with an optional publish time and comment) and *Save & publish*.
+- **History:** revisions with kind and comment, diffs against the previous or the published revision, one-click rollback.
+- **Try console:** example values generated from the parameters' examples, defaults, allowed values, formats, lengths, ranges and
+  JSON Schemas, plus *Copy as curl / HTTPie / C# HttpClient*.
+- Returns a `RouteGroupBuilder`, so `.RequireAuthorization()` works. The prefix is reserved and path bases are respected.
+  The panel holds no data, so secure the admin API in any case.
 </details>
 
 <details>
@@ -566,6 +637,38 @@ public sealed class AuditChangeHandler(AuditLog audit) : IDynamicEndpointChangeH
 </details>
 
 <details>
+<summary><b>Metrics &amp; tracing: OpenTelemetry</b></summary>
+
+The core emits metrics through a `Meter` and spans through an `ActivitySource`, both named `DynamicEndpoints`. There's no
+OpenTelemetry dependency: wire them up with the `DynamicEndpoints.OpenTelemetry` package…
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddDynamicEndpointsInstrumentation())
+    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddDynamicEndpointsInstrumentation())
+    .UseOtlpExporter();
+```
+
+…or with the constants: `m.AddMeter(DynamicEndpointsTelemetry.MeterName)`, `t.AddSource(DynamicEndpointsTelemetry.ActivitySourceName)`.
+`dotnet-counters monitor --counters DynamicEndpoints` works without any setup.
+
+| Metric | Type | Extra tags |
+|---|---|---|
+| `dynamic_endpoints.requests` | counter | `dynamic_endpoint.outcome` (`processed`, `rejected`, `short_circuited`, `error`), `http.response.status_code` |
+| `dynamic_endpoints.request.duration` | histogram (s) | same as above |
+| `dynamic_endpoints.validation.failures` | counter | `dynamic_endpoint.validation.layer`: `binding`, `constraints`, `parameter_validators`, `rules`, `request_validators` |
+| `dynamic_endpoints.processor.duration` | histogram (s) | |
+| `dynamic_endpoints.errors` | counter | `error.type` |
+
+- **Per endpoint:** every measurement carries `dynamic_endpoint.id`, `dynamic_endpoint.name`, `dynamic_endpoint.processor`,
+  `http.route` and `http.request.method`. ASP.NET Core's own `http.server.request.duration` gets the dynamic route template too.
+- **Spans:** `DynamicEndpoints.Request` with the children `Filters`, `Binding`, `Validation.{layer}` and `Processor`, below the
+  ASP.NET Core request span. Failed layers and exceptions set the span status to `Error`.
+- **Cheap when unused:** instruments are only fed when something listens, and spans only exist for sampled requests.
+- All names are constants in `DynamicEndpointsTelemetry` (`Instruments`, `Activities`, `Tags`, `Outcomes`, `ValidationLayers`).
+</details>
+
+<details>
 <summary><b>EF Core: migrations</b></summary>
 
 **Your own DbContext** (recommended): add the table to your model, and your migrations create and evolve it.
@@ -579,6 +682,10 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 dotnet ef migrations add AddDynamicEndpoints
 ```
 
+`ApplyDynamicEndpointsConfiguration()` maps three tables: `DynamicEndpoints`, plus `DynamicEndpointRevisions` and
+`DynamicEndpointDrafts` for history and drafts. Upgrading from 0.3, add a migration for the two new ones, or pass
+`history: false` to keep the old model (and no history and drafts).
+
 **The bundled `DynamicEndpointsDbContext`** ships its own provider-independent migrations:
 
 ```csharp
@@ -587,7 +694,8 @@ builder.Services.AddDynamicEndpoints()
 // or apply them in your deployment step: await db.Database.MigrateAsync();
 ```
 
-A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`. With your own
+A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`.
+Definitions that existed before the history tables start their history with their published revision. With your own
 context, add the table to an empty initial migration the usual EF Core way. `MigrateOnStartup<TContext>()` applies your own
 context's migrations on start-up, and any `IDynamicEndpointStoreInitializer` runs before definitions are loaded.
 </details>
@@ -640,10 +748,12 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | Package | What |
 |---|---|
 | `DynamicEndpoints` | core: routing, binding, validation engines, manager, admin API, OpenAPI. **Zero third-party dependencies** |
+| `DynamicEndpoints.AdminUI` | the admin panel, `MapDynamicEndpointsAdminUI()` |
 | `DynamicEndpoints.EntityFrameworkCore` | persistence with EF Core |
 | `DynamicEndpoints.FluentValidation` | FluentValidation validators as dynamic validators |
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
 | `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
+| `DynamicEndpoints.OpenTelemetry` | `AddDynamicEndpointsInstrumentation()` for OpenTelemetry metrics and tracing |
 | `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
 
 ## 🧪 Sample app
@@ -652,12 +762,37 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 dotnet run --project samples/DynamicEndpoints.Sample
 ```
 
-- 🖥️ **Admin panel:** `http://localhost:5118/admin/`. List, editor (parameters, constraints, rules, validators, processor config) and a built-in "Try" console.
+- 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the `DynamicEndpoints.AdminUI` package. List, editor (parameters, constraints, rules,
+  validators, processor config), drafts and scheduled publishing, history with diffs and rollback, and a "Try" console with
+  generated examples and curl / HTTPie / C# snippets.
 - 📜 **Swagger UI:** `http://localhost:5118/swagger`, with the *Dynamic endpoints* and *Admin API* documents.
 - 🧩 **Processors:** `echo`, `template`, `calculator`, `collection` (a JSON document store in SQLite) and an inline `clock`.
 - 🛡️ **Validators:** `nip` (C#), `unique-value` (C#, DB lookup), `iban` and `booking-request` (FluentValidation). `POST /contacts` shows the built-in formats.
 - 🌱 **Seeding:** `SampleEndpointsSeeder` seeds the demo endpoints on the first start.
 - 👋 **Custom management API:** `Greetings/` builds its own API on the injected `IDynamicEndpointManager`.
+
+### …with .NET Aspire
+
+```bash
+dotnet run --project samples/DynamicEndpoints.AppHost      # needs Docker or Podman
+```
+
+The AppHost runs the sample in **two replicas** on **PostgreSQL** (definitions, history, drafts) with **Redis** change
+notifications: change an endpoint in the panel and both replicas serve it at once. `DynamicEndpoints.ServiceDefaults` wires
+OpenTelemetry with `AddDynamicEndpointsInstrumentation()`, so the Aspire dashboard shows `dynamic_endpoints.requests`,
+`…validation.failures` by layer and `…processor.duration` per endpoint, and traces with the binding, validation and processor spans.
+
+### …as a container (live demo)
+
+```bash
+docker build -f samples/DynamicEndpoints.Sample/Dockerfile -t dynamic-endpoints-sample .
+docker run --rm -p 8080:8080 dynamic-endpoints-sample                # SQLite in /data
+docker compose -f samples/docker-compose.yml up --build              # 2 instances + PostgreSQL + Redis + nginx
+```
+
+The image runs in **demo mode** (`Demo__Enabled`): a rate limit per client IP (`Demo__RequestsPerMinute`, 120) and a reset to
+the seeded endpoints every hour (`Demo__ResetInterval`). The admin API stays open, so don't put anything private in there.
+`/health` and `/alive` are there for the platform's probes, and `OTEL_EXPORTER_OTLP_ENDPOINT` turns on telemetry export.
 
 ## 🚢 Releasing
 
@@ -685,12 +820,16 @@ dotnet test DynamicEndpoints.slnx
 
 ```
 src/DynamicEndpoints                       core library
+src/DynamicEndpoints.AdminUI               admin panel (embedded HTML/JS)
 src/DynamicEndpoints.EntityFrameworkCore   EF Core store
 src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
+src/DynamicEndpoints.OpenTelemetry         OpenTelemetry registration
 src/DynamicEndpoints.Testing               test helpers
-samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
+samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite (or PostgreSQL), Dockerfile
+samples/DynamicEndpoints.AppHost           .NET Aspire: the sample ×2 with PostgreSQL, Redis and the dashboard
+samples/DynamicEndpoints.ServiceDefaults   Aspire service defaults incl. the dynamic endpoint metrics
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
 ```
 
@@ -705,11 +844,11 @@ Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainer
 - [x] Zero-dependency core (built-in JSON Schema subset & JsonLogic engine)
 - [x] Built-in string formats
 - [x] Continuous delivery: every push to `main` publishes a new NuGet version
-- [ ] Draft → publish workflow with version history and rollback
+- [x] Draft → publish workflow with version history, diffs, rollback and scheduled publishing
 - [x] Instant change propagation: PostgreSQL `LISTEN/NOTIFY` and Redis pub/sub
 - [x] Change events, transactional change sets, EF Core migrations, test kit
-- [ ] Admin UI as a reusable package
-- [ ] OpenTelemetry metrics per dynamic endpoint
+- [x] Admin UI as a reusable package
+- [x] OpenTelemetry metrics and tracing per dynamic endpoint
 
 ## ⚖️ License
 
@@ -718,10 +857,12 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | Package | Depends on |
 |---|---|
 | `DynamicEndpoints` | ASP.NET Core shared framework only |
+| `DynamicEndpoints.AdminUI` | ASP.NET Core shared framework only |
 | `DynamicEndpoints.EntityFrameworkCore` | `Microsoft.EntityFrameworkCore.Relational` (MIT) |
 | `DynamicEndpoints.FluentValidation` | [FluentValidation](https://github.com/FluentValidation/FluentValidation) (Apache-2.0) |
 | `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
 | `DynamicEndpoints.Redis` | [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) (MIT) |
+| `DynamicEndpoints.OpenTelemetry` | [OpenTelemetry.Api](https://github.com/open-telemetry/opentelemetry-dotnet) (Apache-2.0) |
 | `DynamicEndpoints.Testing` | `Microsoft.AspNetCore.Mvc.Testing` (MIT) |
 
 ## 🤝 Contributing

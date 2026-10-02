@@ -55,12 +55,27 @@ public sealed class DynamicEndpointRecordConfiguration(string table = DynamicEnd
 
 public static class DynamicEndpointsModelBuilderExtensions
 {
-    /// <summary>Adds the dynamic endpoint table to your own DbContext model – create it with your migrations.</summary>
+    /// <summary>
+    /// Adds the dynamic endpoint tables to your own DbContext model – create them with your migrations: the definitions
+    /// (<paramref name="table"/>) and, with <paramref name="history"/>, their revisions and drafts
+    /// (<see cref="DynamicEndpointRevisionRecordConfiguration.DefaultTable"/>, <see cref="DynamicEndpointDraftRecordConfiguration.DefaultTable"/>).
+    /// Without them the store works as before, but keeps no history and drafts.
+    /// </summary>
     public static ModelBuilder ApplyDynamicEndpointsConfiguration(
         this ModelBuilder modelBuilder,
         string table = DynamicEndpointRecordConfiguration.DefaultTable,
-        string? schema = null) =>
+        string? schema = null,
+        bool history = true)
+    {
         modelBuilder.ApplyConfiguration(new DynamicEndpointRecordConfiguration(table, schema));
+        if (history)
+        {
+            modelBuilder.ApplyConfiguration(new DynamicEndpointRevisionRecordConfiguration(schema: schema));
+            modelBuilder.ApplyConfiguration(new DynamicEndpointDraftRecordConfiguration(schema: schema));
+        }
+
+        return modelBuilder;
+    }
 }
 
 /// <summary>
@@ -70,6 +85,10 @@ public static class DynamicEndpointsModelBuilderExtensions
 public class DynamicEndpointsDbContext(DbContextOptions<DynamicEndpointsDbContext> options) : DbContext(options)
 {
     public DbSet<DynamicEndpointRecord> DynamicEndpoints => Set<DynamicEndpointRecord>();
+
+    public DbSet<DynamicEndpointRevisionRecord> DynamicEndpointRevisions => Set<DynamicEndpointRevisionRecord>();
+
+    public DbSet<DynamicEndpointDraftRecord> DynamicEndpointDrafts => Set<DynamicEndpointDraftRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.ApplyDynamicEndpointsConfiguration();
 }

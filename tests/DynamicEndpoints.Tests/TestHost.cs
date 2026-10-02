@@ -14,6 +14,8 @@ internal sealed class TestHost(WebApplication app) : IAsyncDisposable
 {
     public HttpClient Client { get; } = app.GetTestClient();
 
+    public IServiceProvider Services => app.Services;
+
     public IDynamicEndpointManager Manager => app.Services.GetRequiredService<IDynamicEndpointManager>();
 
     public static async Task<TestHost> StartAsync(

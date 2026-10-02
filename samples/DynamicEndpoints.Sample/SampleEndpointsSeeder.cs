@@ -114,11 +114,24 @@ public sealed class SampleEndpointsSeeder(IDynamicEndpointManager manager, ILogg
                 .FromQuery("timeZone", p => p.String().Default("UTC").Example("Europe/Warsaw")),
         ];
 
+        var seeded = 0;
         foreach (var definition in definitions)
         {
-            await manager.CreateAsync(definition, cancellationToken);
+            try
+            {
+                // A stable id per route: replicas seeding at the same time (Aspire, docker compose) can't create duplicates.
+                await manager.CreateAsync(definition with { Id = StableId(definition) }, cancellationToken);
+                seeded++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogDebug(ex, "Sample endpoint {Method} {Route} was not seeded – another instance was faster.", definition.Method, definition.Route);
+            }
         }
 
-        logger.LogInformation("Seeded {Count} sample endpoints.", definitions.Length);
+        logger.LogInformation("Seeded {Count} sample endpoints.", seeded);
     }
+
+    private static Guid StableId(DynamicEndpointDefinition definition) =>
+        new(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes($"{definition.Method} {definition.Route}")));
 }

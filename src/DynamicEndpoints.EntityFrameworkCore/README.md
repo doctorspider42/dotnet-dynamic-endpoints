@@ -12,7 +12,7 @@ by every instance of your application.
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-        modelBuilder.ApplyDynamicEndpointsConfiguration(); // adds the DynamicEndpoints table
+        modelBuilder.ApplyDynamicEndpointsConfiguration(); // DynamicEndpoints, DynamicEndpointRevisions, DynamicEndpointDrafts
         // or: modelBuilder.ApplyConfiguration(new DynamicEndpointRecordConfiguration("endpoints", "api"));
 }
 
@@ -20,7 +20,8 @@ builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString));
 builder.Services.AddDynamicEndpoints().UseEntityFrameworkStore<AppDbContext>();
 ```
 
-Create the table with your migrations as usual (`dotnet ef migrations add AddDynamicEndpoints`). `.MigrateOnStartup<AppDbContext>()`
+Create the tables with your migrations as usual (`dotnet ef migrations add AddDynamicEndpoints`). Upgrading from 0.3, the
+history and draft tables are new: add a migration, or call `ApplyDynamicEndpointsConfiguration(history: false)` to go without them. `.MigrateOnStartup<AppDbContext>()`
 applies them on start-up if you want that.
 
 ## …or the bundled context, with its own migrations
@@ -53,6 +54,8 @@ through your scoped DbContext, inside `db.Database.BeginTransactionAsync()`.
 - **Columns:** the searchable fields (method, route, name, enabled, version, timestamps).
 - **JSON:** the full definition, so the definition model can grow without schema migrations.
 - **Concurrency:** `Version` is a concurrency token, so a stale write from another instance or admin is rejected.
+- **History and drafts:** one row per revision (`DynamicEndpointRevisions`) and per draft (`DynamicEndpointDrafts`). A revision is
+  saved in the same `SaveChanges` as the definition it belongs to, and a publish removes its draft in it too.
 - **Providers:** any EF Core relational provider works (SQL Server, PostgreSQL, SQLite, MySQL, …).
 
 📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·

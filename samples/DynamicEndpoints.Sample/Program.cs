@@ -1,15 +1,31 @@
 using DynamicEndpoints;
 using DynamicEndpoints.Sample;
 using DynamicEndpoints.Sample.Data;
+using DynamicEndpoints.Sample.Demo;
 using DynamicEndpoints.Sample.Greetings;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=dynamic-endpoints.db"));
+// OpenTelemetry with the per-endpoint metrics and traces, health checks, service discovery (DynamicEndpoints.ServiceDefaults).
+builder.AddServiceDefaults();
+var demo = builder.AddDemoMode();
 
-builder.Services
+// SQLite by default; PostgreSQL when there's a "dynamicendpoints" connection string (the Aspire AppHost, docker compose).
+var postgres = builder.Configuration.GetConnectionString("dynamicendpoints");
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    if (postgres is not null)
+    {
+        options.UseNpgsql(postgres);
+    }
+    else
+    {
+        options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=dynamic-endpoints.db");
+    }
+});
+
+var dynamicEndpoints = builder.Services
     .AddDynamicEndpoints(options =>
     {
         options.ReservedPrefixes.Add("/admin");
@@ -38,6 +54,12 @@ builder.Services
     }, "Returns the current time in the 'timeZone' parameter (IANA or Windows id).")
     .UseEntityFrameworkStore<AppDbContext>();
 
+// Several instances: Redis tells the others about a change right away (polling above stays the fallback).
+if (builder.Configuration.GetConnectionString("redis") is { Length: > 0 } redis)
+{
+    dynamicEndpoints.UseRedisChangeNotifications(redis);
+}
+
 // Own feature service that manages dynamic endpoints through the injected IDynamicEndpointManager.
 builder.Services.AddScoped<GreetingEndpointsService>();
 
@@ -46,19 +68,25 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Demo only – use migrations in a real application.
+await SampleDatabase.EnsureCreatedAsync(app.Services);
+
+if (demo.Enabled)
 {
-    // Demo only – use migrations in a real application.
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
+    app.UseRateLimiter();
 }
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
 app.MapGet("/", () => Results.Redirect("/admin/")).ExcludeFromDescription();
+app.MapDefaultEndpoints();
 
 app.MapDynamicEndpoints();
 app.MapDynamicEndpointsAdmin("/api/admin/endpoints"); // generic admin API – .RequireAuthorization("admin") in real life
+app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints", o =>  // the panel (DynamicEndpoints.AdminUI)
+{
+    o.Title = demo.Enabled ? $"Dynamic Endpoints – live demo, resets every {demo.ResetInterval.TotalMinutes:0} min" : "Dynamic Endpoints";
+    o.SwaggerUrl = "/swagger";
+    o.OpenApiUrl = "/openapi/dynamic.json";
+});
 app.MapGreetingsApi();                                  // purpose-built API using the injected manager
 app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");
 app.MapOpenApi("/openapi/{documentName}.json");
