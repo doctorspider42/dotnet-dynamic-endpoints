@@ -66,6 +66,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 🚦 **Safe by design** | No code execution, ReDoS-proof regexes, body and depth limits, reserved prefixes, conflict detection. |
 | 🌐 **Multi-instance** | Instant propagation through PostgreSQL `LISTEN/NOTIFY` or Redis pub/sub, with polling as the fallback. |
 | 📣 **Change events** | Created / updated / deleted handlers for audit logs and cache invalidation. |
+| 📈 **Metrics & tracing** | Requests, validation failures by layer, processor duration and errors per endpoint, plus spans for binding, every validation layer and the processor. Plain `System.Diagnostics`, ready for OpenTelemetry. |
 | 🧪 **Test kit** | In-memory store for `WebApplicationFactory` and a ready-made test server. No database needed. |
 | 🪄 **Assembly scanning** | `AddFromAssemblyContaining<Program>()` registers every processor, validator and seeder in one call. |
 | 🖥️ **Admin REST API** | One line, `MapDynamicEndpointsAdmin()`, or build your own on top of `IDynamicEndpointManager`. |
@@ -566,6 +567,38 @@ public sealed class AuditChangeHandler(AuditLog audit) : IDynamicEndpointChangeH
 </details>
 
 <details>
+<summary><b>Metrics &amp; tracing: OpenTelemetry</b></summary>
+
+The core emits metrics through a `Meter` and spans through an `ActivitySource`, both named `DynamicEndpoints`. There's no
+OpenTelemetry dependency: wire them up with the `DynamicEndpoints.OpenTelemetry` package…
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddDynamicEndpointsInstrumentation())
+    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddDynamicEndpointsInstrumentation())
+    .UseOtlpExporter();
+```
+
+…or with the constants: `m.AddMeter(DynamicEndpointsTelemetry.MeterName)`, `t.AddSource(DynamicEndpointsTelemetry.ActivitySourceName)`.
+`dotnet-counters monitor --counters DynamicEndpoints` works without any setup.
+
+| Metric | Type | Extra tags |
+|---|---|---|
+| `dynamic_endpoints.requests` | counter | `dynamic_endpoint.outcome` (`processed`, `rejected`, `short_circuited`, `error`), `http.response.status_code` |
+| `dynamic_endpoints.request.duration` | histogram (s) | same as above |
+| `dynamic_endpoints.validation.failures` | counter | `dynamic_endpoint.validation.layer`: `binding`, `constraints`, `parameter_validators`, `rules`, `request_validators` |
+| `dynamic_endpoints.processor.duration` | histogram (s) | |
+| `dynamic_endpoints.errors` | counter | `error.type` |
+
+- **Per endpoint:** every measurement carries `dynamic_endpoint.id`, `dynamic_endpoint.name`, `dynamic_endpoint.processor`,
+  `http.route` and `http.request.method`. ASP.NET Core's own `http.server.request.duration` gets the dynamic route template too.
+- **Spans:** `DynamicEndpoints.Request` with the children `Filters`, `Binding`, `Validation.{layer}` and `Processor`, below the
+  ASP.NET Core request span. Failed layers and exceptions set the span status to `Error`.
+- **Cheap when unused:** instruments are only fed when something listens, and spans only exist for sampled requests.
+- All names are constants in `DynamicEndpointsTelemetry` (`Instruments`, `Activities`, `Tags`, `Outcomes`, `ValidationLayers`).
+</details>
+
+<details>
 <summary><b>EF Core: migrations</b></summary>
 
 **Your own DbContext** (recommended): add the table to your model, and your migrations create and evolve it.
@@ -644,6 +677,7 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | `DynamicEndpoints.FluentValidation` | FluentValidation validators as dynamic validators |
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
 | `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
+| `DynamicEndpoints.OpenTelemetry` | `AddDynamicEndpointsInstrumentation()` for OpenTelemetry metrics and tracing |
 | `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
 
 ## 🧪 Sample app
@@ -689,6 +723,7 @@ src/DynamicEndpoints.EntityFrameworkCore   EF Core store
 src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
+src/DynamicEndpoints.OpenTelemetry         OpenTelemetry registration
 src/DynamicEndpoints.Testing               test helpers
 samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
@@ -709,7 +744,7 @@ Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainer
 - [x] Instant change propagation: PostgreSQL `LISTEN/NOTIFY` and Redis pub/sub
 - [x] Change events, transactional change sets, EF Core migrations, test kit
 - [ ] Admin UI as a reusable package
-- [ ] OpenTelemetry metrics per dynamic endpoint
+- [x] OpenTelemetry metrics and tracing per dynamic endpoint
 
 ## ⚖️ License
 
@@ -722,6 +757,7 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | `DynamicEndpoints.FluentValidation` | [FluentValidation](https://github.com/FluentValidation/FluentValidation) (Apache-2.0) |
 | `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
 | `DynamicEndpoints.Redis` | [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) (MIT) |
+| `DynamicEndpoints.OpenTelemetry` | [OpenTelemetry.Api](https://github.com/open-telemetry/opentelemetry-dotnet) (Apache-2.0) |
 | `DynamicEndpoints.Testing` | `Microsoft.AspNetCore.Mvc.Testing` (MIT) |
 
 ## 🤝 Contributing

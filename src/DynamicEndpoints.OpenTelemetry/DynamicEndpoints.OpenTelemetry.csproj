@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>DynamicEndpoints.OpenTelemetry</PackageId>
+    <Description>OpenTelemetry registration of the DynamicEndpoints metrics and traces: per-endpoint requests, validation failures by layer, processor duration and errors.</Description>
+    <PackageTags>$(PackageTags);opentelemetry;metrics;tracing;observability</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DynamicEndpoints\DynamicEndpoints.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Api" Version="1.15.3" />
+  </ItemGroup>
+
+</Project>

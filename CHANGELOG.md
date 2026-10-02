@@ -9,6 +9,16 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Metrics and tracing per dynamic endpoint**, with `System.Diagnostics` only (the core still has no dependencies). The meter
+  `DynamicEndpoints` has `dynamic_endpoints.requests` (with outcome and status code), `dynamic_endpoints.request.duration`,
+  `dynamic_endpoints.validation.failures` (by layer: binding, constraints, parameter validators, rules, request validators),
+  `dynamic_endpoints.processor.duration` and `dynamic_endpoints.errors`, all tagged with the endpoint's id, name, processor,
+  route and method. The activity source `DynamicEndpoints` adds spans for the request, filters, binding, every validation layer
+  and the processor. Names are constants in `DynamicEndpointsTelemetry`.
+- `DynamicEndpoints.OpenTelemetry` package: `AddDynamicEndpointsInstrumentation()` for `MeterProviderBuilder` and `TracerProviderBuilder`.
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

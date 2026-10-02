@@ -13,6 +13,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" Version="1.15.3" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageReference Include="Testcontainers.Redis" Version="4.15.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -27,6 +28,7 @@
     <ProjectReference Include="..\..\src\DynamicEndpoints.EntityFrameworkCore\DynamicEndpoints.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\samples\DynamicEndpoints.Sample\DynamicEndpoints.Sample.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.FluentValidation\DynamicEndpoints.FluentValidation.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.OpenTelemetry\DynamicEndpoints.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.PostgreSql\DynamicEndpoints.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.Redis\DynamicEndpoints.Redis.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.Testing\DynamicEndpoints.Testing.csproj" />
