@@ -27,7 +27,7 @@ public sealed class EntityFrameworkTests : IDisposable
         }
 
         await using var context = CreateBundledContext();
-        Assert.Equal([InitialDynamicEndpoints.Id], await context.Database.GetAppliedMigrationsAsync());
+        Assert.Equal([InitialDynamicEndpoints.Id, DynamicEndpointRevisionsAndDrafts.Id], await context.Database.GetAppliedMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Single(await context.DynamicEndpoints.ToListAsync());
     }
@@ -49,7 +49,7 @@ public sealed class EntityFrameworkTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, (await host.Client.GetAsync("/kept")).StatusCode);
         await using var check = CreateBundledContext();
-        Assert.Contains(InitialDynamicEndpoints.Id, await check.Database.GetAppliedMigrationsAsync());
+        Assert.Equal([InitialDynamicEndpoints.Id, DynamicEndpointRevisionsAndDrafts.Id], await check.Database.GetAppliedMigrationsAsync());
     }
 
     [Fact]

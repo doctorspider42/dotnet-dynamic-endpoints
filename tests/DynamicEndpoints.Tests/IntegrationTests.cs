@@ -62,7 +62,7 @@ public sealed class IntegrationTests
 
         await using var context = new DynamicEndpoints.EntityFrameworkCore.DynamicEndpointsDbContext(
             new DbContextOptionsBuilder<DynamicEndpoints.EntityFrameworkCore.DynamicEndpointsDbContext>().UseNpgsql(connectionString).Options);
-        Assert.Equal([InitialDynamicEndpoints.Id], await context.Database.GetAppliedMigrationsAsync());
+        Assert.Equal([InitialDynamicEndpoints.Id, DynamicEndpointRevisionsAndDrafts.Id], await context.Database.GetAppliedMigrationsAsync());
         Assert.False(context.Database.HasPendingModelChanges());
     }
 
@@ -130,6 +130,26 @@ public sealed class TestingPackageTests : IDisposable
         Assert.Equal("Hi Ola", await server.Client.GetStringAsync("/hi/Ola"));
         Assert.Equal(HttpStatusCode.BadRequest, (await server.Client.GetAsync("/hi/O")).StatusCode);
         Assert.NotNull(server.OpenApi.GetDocument()["paths"]!["/hi/{name}"]);
+    }
+
+    [Fact]
+    public async Task The_test_server_keeps_drafts_and_publishes_scheduled_ones_on_request()
+    {
+        var store = new InMemoryDynamicEndpointStore();
+        await using var server = await DynamicEndpointsTestServer.StartAsync(new DynamicEndpointsTestServerOptions
+        {
+            Store = store,
+            DynamicEndpoints = b => b.AddProcessor("hello", _ => Results.Text("Hi")),
+        });
+
+        var draft = await server.Manager.SaveDraftAsync(DynamicEndpoint.Get("/later").HandledBy("hello"), DateTimeOffset.UtcNow);
+        Assert.Equal(HttpStatusCode.NotFound, (await server.Client.GetAsync("/later")).StatusCode);
+        Assert.NotNull(await store.FindDraftAsync(draft.EndpointId, default));
+
+        await server.Manager.PublishDueAsync();
+
+        Assert.Equal("Hi", await server.Client.GetStringAsync("/later"));
+        Assert.Single(await store.GetRevisionsAsync(draft.EndpointId, default));
     }
 
     public void Dispose()

@@ -9,13 +9,14 @@ public static class DynamicEndpointsEntityFrameworkExtensions
 {
     /// <summary>
     /// Persists definitions through your own context. Add the table to its model with
-    /// <c>modelBuilder.ApplyDynamicEndpointsConfiguration()</c> and create it via your migrations.
+    /// <c>modelBuilder.ApplyDynamicEndpointsConfiguration()</c> and create it via your migrations. History and drafts are kept when
+    /// the model also maps their tables (the default of <c>ApplyDynamicEndpointsConfiguration</c>).
     /// </summary>
     public static IDynamicEndpointsBuilder UseEntityFrameworkStore<TContext>(this IDynamicEndpointsBuilder builder)
         where TContext : DbContext
     {
         builder.Services.Replace(ServiceDescriptor.Scoped<IDynamicEndpointStore>(sp =>
-            new EntityFrameworkDynamicEndpointStore<TContext>(sp.GetRequiredService<TContext>(), saveChanges: true)));
+            EntityFrameworkDynamicEndpointStore.Create(sp.GetRequiredService<TContext>(), saveChanges: true)));
         return builder;
     }
 

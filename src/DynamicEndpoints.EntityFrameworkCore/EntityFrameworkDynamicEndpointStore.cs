@@ -7,9 +7,13 @@ namespace DynamicEndpoints.EntityFrameworkCore;
 /// Store backed by a DbContext. With <c>saveChanges: false</c> writes are only tracked by the context – they are saved by your
 /// own <c>SaveChanges</c>, together with your other changes and in your transaction (see <see cref="DbContextDynamicEndpointExtensions.GetDynamicEndpointStore"/>).
 /// </summary>
-internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext context, bool saveChanges) : IDynamicEndpointStore
+internal class EntityFrameworkDynamicEndpointStore<TContext>(TContext context, bool saveChanges) : IDynamicEndpointStore
     where TContext : DbContext
 {
+    protected TContext Context => context;
+
+    protected bool SavesChanges => saveChanges;
+
     private DbSet<DynamicEndpointRecord> Records => context.Set<DynamicEndpointRecord>();
 
     public async Task<IReadOnlyList<DynamicEndpointDefinition>> GetAllAsync(CancellationToken cancellationToken)
@@ -51,7 +55,7 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         await SaveAsync(definition.Id, expectedRevision, cancellationToken);
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    public virtual async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         if (saveChanges)
         {
@@ -68,7 +72,7 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         return true;
     }
 
-    private async Task SaveAsync(Guid id, int expectedRevision, CancellationToken cancellationToken)
+    protected async Task SaveAsync(Guid id, int expectedRevision, CancellationToken cancellationToken)
     {
         if (!saveChanges)
         {
@@ -116,6 +120,17 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
     }
 }
 
+internal static class EntityFrameworkDynamicEndpointStore
+{
+    /// <summary>A store for <paramref name="context"/> – with history and drafts when its model has their tables.</summary>
+    public static IDynamicEndpointStore Create<TContext>(TContext context, bool saveChanges)
+        where TContext : DbContext =>
+        context.Model.FindEntityType(typeof(DynamicEndpointRevisionRecord)) is not null &&
+        context.Model.FindEntityType(typeof(DynamicEndpointDraftRecord)) is not null
+            ? new EntityFrameworkRevisionStore<TContext>(context, saveChanges)
+            : new EntityFrameworkDynamicEndpointStore<TContext>(context, saveChanges);
+}
+
 public static class DbContextDynamicEndpointExtensions
 {
     /// <summary>
@@ -127,6 +142,6 @@ public static class DbContextDynamicEndpointExtensions
     public static IDynamicEndpointStore GetDynamicEndpointStore(this DbContext context, bool saveChanges = false)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return new EntityFrameworkDynamicEndpointStore<DbContext>(context, saveChanges);
+        return EntityFrameworkDynamicEndpointStore.Create(context, saveChanges);
     }
 }

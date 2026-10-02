@@ -46,11 +46,8 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    // Demo only – use migrations in a real application.
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.EnsureCreatedAsync();
-}
+// Demo only – use migrations in a real application.
+await SampleDatabase.EnsureCreatedAsync(app.Services);
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

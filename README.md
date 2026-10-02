@@ -51,6 +51,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | | |
 |---|---|
 | 🔥 **Hot endpoints** | Add, change, disable and delete endpoints at runtime. Routing swaps atomically, so a request never sees a half-applied state. |
+| 📝 **Drafts & history** | Save a change as a draft, publish it now or at a set time. Every revision is kept: diff any two, roll back with one call. |
 | 💾 **Persistent** | Stored with EF Core (any provider) and loaded on start-up. Optimistic concurrency, ready-made migrations, and saving in *your* transaction. |
 | 🧩 **Declarative binding** | Route, query, header, JSON body and form parameters with types, defaults and request names (`X-Tenant-Id` → `tenantId`). |
 | 📎 **File uploads** | `multipart/form-data` with size and content-type limits, streamed by ASP.NET Core. No base64, documented as binary in OpenAPI. |
@@ -283,7 +284,42 @@ await manager.ReloadAsync();                                           // re-rea
 `UpsertAsync` is made for syncing definitions from your own model: it creates the endpoint, or replaces the stored one with the same
 `Id` whatever its revision. Nothing is written (and the revision stays) when the content didn't change.
 
+Drafts, history and rollback are on the manager too, see *Drafts, history &amp; rollback* below.
+
 The sample's `Greetings/` folder shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.
+</details>
+
+<details>
+<summary><b>Drafts, history &amp; rollback</b></summary>
+
+A change doesn't have to go live right away. Save it as a **draft**: it's validated like any definition, but routing keeps
+serving the published revision until you publish the draft, by hand or at a set time.
+
+```csharp
+var draft = await manager.SaveDraftAsync(current with { Route = "/v2/orders" });   // based on current.Revision
+await manager.SaveDraftAsync(DynamicEndpoint.Get("/promo").HandledBy("echo"),      // a new endpoint, drafted…
+    publishAt: new DateTimeOffset(2026, 12, 24, 18, 0, 0, TimeSpan.Zero), comment: "Christmas promo");   // …and scheduled
+var changes = await manager.DiffDraftAsync(draft.EndpointId);                      // what publishing would change
+await manager.PublishAsync(draft.EndpointId);                                      // live – as the next revision
+
+var history = await manager.GetHistoryAsync(id);                                   // every revision, newest first
+var diff = await manager.DiffAsync(id, fromRevision: 3, toRevision: 5);            // [{ path: "parameters[quantity].maximum", kind: "Changed", from: 10, to: 100 }]
+await manager.RollbackAsync(id, revision: 3);                                      // revision 3's content as revision 6
+```
+
+- **History:** every create, update, enable/disable, publish and rollback is a revision with its kind and comment. A rollback
+  adds a revision instead of rewriting history. Deleting an endpoint deletes its history and draft.
+- **Drafts:** at most one per endpoint. `ListAsync` shows them (`state.Draft`), and never-published endpoints have the status
+  `Draft`. A draft remembers the revision it's based on (`BaseRevision`). If someone changed the endpoint in the meantime,
+  publishing fails with a `409` / `DynamicEndpointConcurrencyException`, so save the draft again on top of the current revision.
+- **Scheduled publishing:** drafts with `PublishAt` are published every `options.ScheduledPublishInterval` (10 s), exactly once
+  across instances. A draft that can't be published any more (e.g. its route is taken) is logged and unscheduled. Call
+  `PublishDueAsync()` from your own scheduler if you turn the interval off.
+- **Diffs** address parameters and validators by name (`parameters[quantity].maximum`), so inserting one doesn't make
+  everything look changed. `DynamicEndpointDiff.Compare(a, b)` compares any two definitions.
+- **Transactions:** change sets have `SaveDraftAsync`, `PublishAsync`, `RollbackAsync` and `DiscardDraftAsync` too.
+- **Stores:** the in-memory and EF Core stores keep history and drafts. A custom store opts in by implementing
+  `IDynamicEndpointRevisionStore`, and without it these calls throw `NotSupportedException` (`501` in the admin API).
 </details>
 
 <details>
@@ -322,6 +358,13 @@ await changes.ApplyAsync(ct);                                       // routing t
 | `POST` | `/validate` | dry run |
 | `POST` | `/reload` | re-read the store |
 | `GET` | `/processors` · `/validators` | building blocks for the UI |
+| `GET` · `POST` | `/drafts` | all drafts · draft a new endpoint |
+| `GET` · `PUT` · `DELETE` | `/{id}/draft` | the draft of an endpoint (`{ definition, publishAt, comment }`) |
+| `GET` | `/{id}/draft/diff` | what publishing would change |
+| `POST` | `/{id}/publish` | publish the draft |
+| `GET` | `/{id}/revisions` · `/{id}/revisions/{revision}` | history |
+| `GET` | `/{id}/diff?from=3&to=5` | differences between revisions (`to` defaults to the published one) |
+| `POST` | `/{id}/revisions/{revision}/rollback` | roll back |
 
 It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
 </details>
@@ -612,6 +655,10 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 dotnet ef migrations add AddDynamicEndpoints
 ```
 
+`ApplyDynamicEndpointsConfiguration()` maps three tables: `DynamicEndpoints`, plus `DynamicEndpointRevisions` and
+`DynamicEndpointDrafts` for history and drafts. Upgrading from 0.3, add a migration for the two new ones, or pass
+`history: false` to keep the old model (and no history and drafts).
+
 **The bundled `DynamicEndpointsDbContext`** ships its own provider-independent migrations:
 
 ```csharp
@@ -620,7 +667,8 @@ builder.Services.AddDynamicEndpoints()
 // or apply them in your deployment step: await db.Database.MigrateAsync();
 ```
 
-A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`. With your own
+A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`.
+Definitions that existed before the history tables start their history with their published revision. With your own
 context, add the table to an empty initial migration the usual EF Core way. `MigrateOnStartup<TContext>()` applies your own
 context's migrations on start-up, and any `IDynamicEndpointStoreInitializer` runs before definitions are loaded.
 </details>
@@ -740,7 +788,7 @@ Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainer
 - [x] Zero-dependency core (built-in JSON Schema subset & JsonLogic engine)
 - [x] Built-in string formats
 - [x] Continuous delivery: every push to `main` publishes a new NuGet version
-- [ ] Draft → publish workflow with version history and rollback
+- [x] Draft → publish workflow with version history, diffs, rollback and scheduled publishing
 - [x] Instant change propagation: PostgreSQL `LISTEN/NOTIFY` and Redis pub/sub
 - [x] Change events, transactional change sets, EF Core migrations, test kit
 - [ ] Admin UI as a reusable package

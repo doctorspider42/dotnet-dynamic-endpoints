@@ -17,7 +17,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
   `dynamic_endpoints.processor.duration` and `dynamic_endpoints.errors`, all tagged with the endpoint's id, name, processor,
   route and method. The activity source `DynamicEndpoints` adds spans for the request, filters, binding, every validation layer
   and the processor. Names are constants in `DynamicEndpointsTelemetry`.
+- **Drafts, history and rollback.** `SaveDraftAsync` saves a validated change (or a new endpoint) that isn't routed until
+  `PublishAsync`, or until its `PublishAt` time (`options.ScheduledPublishInterval`, 10 s by default; `PublishDueAsync()` for your own
+  scheduler). Every change is kept as a revision with its kind and comment: `GetHistoryAsync`, `GetRevisionAsync`,
+  `DiffAsync(id, from, to)`, `DiffDraftAsync` and `RollbackAsync(id, revision)`, which publishes old content as the next revision.
+  Publishing an outdated draft fails with a concurrency error. `DynamicEndpointDiff.Compare` compares any two definitions. Change sets
+  support drafts, publishing and rollbacks too. The admin API has `/drafts`, `/{id}/draft`, `/{id}/publish`, `/{id}/revisions`,
+  `/{id}/diff` and `/{id}/revisions/{revision}/rollback`.
+- `IDynamicEndpointRevisionStore`: the optional store capability behind it, implemented by the in-memory store (and so by
+  `DynamicEndpoints.Testing`) and the EF Core store. The bundled `DynamicEndpointsDbContext` gets the migration
+  `DynamicEndpointRevisionsAndDrafts` (provider-independent, adopted for databases created with `EnsureCreated`).
 - `DynamicEndpoints.OpenTelemetry` package: `AddDynamicEndpointsInstrumentation()` for `MeterProviderBuilder` and `TracerProviderBuilder`.
+
+### Changed
+
+- `IDynamicEndpointManager` has new members for drafts, history and rollback. Your own implementations of the interface (e.g.
+  decorators) need them too.
+- **EF Core, your own DbContext:** `ApplyDynamicEndpointsConfiguration()` also maps `DynamicEndpointRevisions` and
+  `DynamicEndpointDrafts`. Add a migration for them, or pass `history: false` to keep the 0.3 model without history and drafts.
+  Contexts that map only `DynamicEndpointRecordConfiguration` keep working unchanged.
+- `ListAsync` and `GetAsync` also return never-published drafts, with the new status `DynamicEndpointStatus.Draft`.
+  `DynamicEndpointState.Draft` carries the draft of an endpoint.
+- The admin API answers `501` when the store keeps no history and drafts.
+- `DynamicEndpoints.Testing`: scheduled publishing is off in the in-memory setup, so call `PublishDueAsync()` in tests.
 
 ## [0.3.0] - 2026-10-02
 

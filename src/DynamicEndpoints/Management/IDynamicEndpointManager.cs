@@ -58,4 +58,69 @@ public interface IDynamicEndpointManager
 
     /// <summary>Re-reads all definitions from the store and rebuilds the routing table of this instance.</summary>
     Task ReloadAsync(CancellationToken cancellationToken = default);
+
+    // ----- drafts, history and rollback – need a store implementing IDynamicEndpointRevisionStore (NotSupportedException otherwise)
+
+    /// <summary>
+    /// Saves a draft – validated like a published definition, but not routed until it is published. A definition without an id
+    /// drafts a new endpoint. Its <see cref="DynamicEndpointDefinition.Revision"/> is the revision the draft is based on (<c>0</c>: the
+    /// current one). Replaces an existing draft; set <see cref="DynamicEndpointDraft.PublishAt"/> to publish it automatically.
+    /// </summary>
+    /// <exception cref="DynamicEndpointValidationException" />
+    /// <exception cref="DynamicEndpointNotFoundException" />
+    /// <exception cref="DynamicEndpointConcurrencyException" />
+    Task<DynamicEndpointDraft> SaveDraftAsync(DynamicEndpointDraft draft, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DynamicEndpointDraft>> ListDraftsAsync(CancellationToken cancellationToken = default);
+
+    Task<DynamicEndpointDraft?> GetDraftAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Drops a draft; the published revision stays.</summary>
+    Task<bool> DiscardDraftAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Publishes the draft of an endpoint as its next revision (the first one of a new endpoint).</summary>
+    /// <exception cref="DynamicEndpointNotFoundException">There is no draft.</exception>
+    /// <exception cref="DynamicEndpointConcurrencyException">The endpoint changed since the draft was based on it.</exception>
+    /// <exception cref="DynamicEndpointValidationException" />
+    Task<DynamicEndpointDefinition> PublishAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Publishes every draft whose <see cref="DynamicEndpointDraft.PublishAt"/> has come – runs on its own every
+    /// <see cref="DynamicEndpointsOptions.ScheduledPublishInterval"/>. A draft that can't be published (invalid, or based on an
+    /// outdated revision) is logged and unscheduled, so it doesn't fail again and again; the draft itself stays.
+    /// </summary>
+    Task<IReadOnlyList<DynamicEndpointDefinition>> PublishDueAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>All revisions of an endpoint, newest first – the published one included.</summary>
+    Task<IReadOnlyList<DynamicEndpointRevision>> GetHistoryAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<DynamicEndpointRevision?> GetRevisionAsync(Guid id, int revision, CancellationToken cancellationToken = default);
+
+    /// <summary>Publishes the content of an earlier revision again, as the next revision.</summary>
+    /// <exception cref="DynamicEndpointNotFoundException" />
+    /// <exception cref="DynamicEndpointValidationException">The old revision is no longer valid, e.g. its processor was removed.</exception>
+    Task<DynamicEndpointDefinition> RollbackAsync(Guid id, int revision, CancellationToken cancellationToken = default);
+
+    /// <summary>What changed from one revision to another (either may be the older one).</summary>
+    /// <exception cref="DynamicEndpointNotFoundException" />
+    Task<IReadOnlyList<DynamicEndpointDifference>> DiffAsync(Guid id, int fromRevision, int toRevision, CancellationToken cancellationToken = default);
+
+    /// <summary>What publishing the draft would change – compared with the published revision (everything is new for a new endpoint).</summary>
+    /// <exception cref="DynamicEndpointNotFoundException">There is no draft.</exception>
+    Task<IReadOnlyList<DynamicEndpointDifference>> DiffDraftAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+public static class DynamicEndpointManagerExtensions
+{
+    /// <summary>Saves <paramref name="definition"/> as a draft – see <see cref="IDynamicEndpointManager.SaveDraftAsync"/>.</summary>
+    public static Task<DynamicEndpointDraft> SaveDraftAsync(
+        this IDynamicEndpointManager manager,
+        DynamicEndpointDefinition definition,
+        DateTimeOffset? publishAt = null,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(manager);
+        return manager.SaveDraftAsync(new DynamicEndpointDraft { Definition = definition, PublishAt = publishAt, Comment = comment }, cancellationToken);
+    }
 }
