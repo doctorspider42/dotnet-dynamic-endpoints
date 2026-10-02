@@ -1178,15 +1178,29 @@ function renderImportResult(r, dryRun) {
 }
 
 // ---------- OpenAPI import ----------
-let openApiPlan = null;
+let openApiPlan = null;   // the dry run the confirmation refers to
+let openApiTags = [];     // tags of the document (from the last dry run) for the tag → processor table
+let openApiTagMap = {};   // tag → processor chosen in the table
+
+const OPENAPI_MODES = {
+  create: 'Create – only adds operations that weren\'t imported yet',
+  upsert: 'Upsert – also updates endpoints imported from the document before',
+  sync: 'Sync – like upsert, and deletes imported endpoints whose operation is gone',
+};
+
+const PROCESSOR_SOURCES = {
+  OperationExtension: 'extension on the operation', PathExtension: 'extension on the path', Tag: 'tag mapping',
+  DocumentExtension: 'extension on the document', Mock: 'mock', Option: 'processor option', Default: 'default processor', Kept: 'kept',
+};
 
 function openOpenApiImport() {
-  openApiPlan = null;
+  openApiPlan = null; openApiTags = []; openApiTagMap = {};
   openDrawer('Import from OpenAPI');
   $('#drawer-body').innerHTML = `
     <section class="card"><h3>1 · Document</h3>
       <div class="grid">
         <label class="field half">Upload an OpenAPI 3.x document<input type="file" id="oa-file" accept=".json,.yaml,.yml"></label>
+        <label class="field half">Mode<select id="oa-mode">${Object.entries(OPENAPI_MODES).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select></label>
         <label class="field wide">…or paste it (${features.formats.map(f => f.toUpperCase()).join(' or ')})<textarea id="oa-text" rows="8" spellcheck="false" placeholder='{ "openapi": "3.0.1", "paths": { … } }'></textarea></label>
       </div>
     </section>
@@ -1196,32 +1210,63 @@ function openOpenApiImport() {
         <label class="field">Route prefix<input name="routePrefix" class="mono" placeholder="/imported"></label>
         <label class="field">Group<input name="group" placeholder="from the tags"></label>
         <label class="field">Only tags <span class="muted">(comma separated)</span><input name="tag" placeholder="all operations"></label>
+        <label class="field">Document id <span class="muted">(re-imports match it)</span><input name="documentId" placeholder="info.title"></label>
+        <label class="check"><input type="checkbox" name="mock"> Mock – answer with the documented examples</label>
         <label class="check"><input type="checkbox" name="enabled"> Enable right away</label>
         <label class="check"><input type="checkbox" name="skipInvalid"> Skip invalid operations</label>
       </form>
-      <p class="hint">Creates skeletons – routes, parameters with types and constraints, bodies, response schemas. Existing routes are skipped; imported endpoints are disabled unless enabled here, so you can wire the processor first.</p>
+      <div id="oa-tags"></div>
+      <p class="hint">Creates skeletons – routes, parameters with types and constraints, bodies, response schemas. Processors come from
+        <code>x-dynamic-endpoints-processor</code> extensions, then the tag table, then the processor above; <b>Mock</b> uses the
+        <code>response</code> processor instead (extensions still win). Endpoints that weren't imported from this document are never
+        changed. New endpoints are disabled unless enabled here; updates keep their enabled state.${features.tenant ? ` Only endpoints of tenant <b>${esc(features.tenant)}</b> are touched.` : ''}</p>
     </section>
     <div id="oa-result"></div>`;
   $('#oa-file').onchange = (e) => readFileInto(e.target, '#oa-text', () => dryRunOpenApi());
-  $('#oa-text').oninput = () => { delete $('#oa-text').dataset.fileName; openApiPlan = null; renderOpenApiFoot(); };
-  for (const el of document.querySelectorAll('#oa-options [name]')) el.addEventListener('change', () => { openApiPlan = null; renderOpenApiFoot(); });
+  $('#oa-text').oninput = () => { delete $('#oa-text').dataset.fileName; invalidateOpenApi(); };
+  $('#oa-mode').onchange = () => { invalidateOpenApi(); if ($('#oa-text').value.trim()) dryRunOpenApi(); };
+  for (const el of document.querySelectorAll('#oa-options [name]')) el.addEventListener('change', () => { invalidateOpenApi(); renderOpenApiTags(); });
+  renderOpenApiTags();
   renderOpenApiFoot();
 }
 
+function invalidateOpenApi() { openApiPlan = null; renderOpenApiFoot(); }
+
+// Tag → processor table, filled from the document's tags once a dry run read them.
+function renderOpenApiTags() {
+  const box = $('#oa-tags');
+  if (!box) return;
+  if (!openApiTags.length) { box.innerHTML = ''; return; }
+  const mock = !!new FormData($('#oa-options')).get('mock');
+  box.innerHTML = `<h4 style="margin:12px 0 6px">Processor per tag <span class="muted" style="font-weight:normal">(an operation gets the mapping of its first mapped tag${mock ? ' – ignored in mock mode' : ''})</span></h4>
+    <table><thead><tr><th>Tag</th><th>Processor</th></tr></thead><tbody>
+    ${openApiTags.map(t => `<tr><td><code>${esc(t)}</code></td>
+      <td><select data-tag="${esc(t)}" ${mock ? 'disabled' : ''} onchange="setOpenApiTag(this.dataset.tag, this.value)"><option value="">—</option>${processors.map(p => `<option ${openApiTagMap[t] === p.name ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></td></tr>`).join('')}
+    </tbody></table>`;
+}
+
+function setOpenApiTag(tag, processor) {
+  if (processor) openApiTagMap[tag] = processor; else delete openApiTagMap[tag];
+  invalidateOpenApi();
+}
+
+function openApiChanges(p) { return p ? p.created + p.updated + p.deleted : 0; }
+
 function renderOpenApiFoot() {
-  const n = openApiPlan?.created ?? 0;
+  const n = openApiChanges(openApiPlan);
   $('#drawer-foot').innerHTML = `<button onclick="closeDrawer()">Close</button>
     <button ${openApiPlan ? '' : 'class="primary"'} onclick="dryRunOpenApi()">3 · Dry run</button>
-    <button class="primary" onclick="confirmOpenApi()" ${openApiPlan?.succeeded && n ? '' : 'disabled title="Run a successful dry run first"'}>4 · Create ${n ? `${n} endpoint${n === 1 ? '' : 's'}` : ''}</button>`;
+    <button class="primary" onclick="confirmOpenApi()" ${openApiPlan?.succeeded && n ? '' : 'disabled title="Run a successful dry run with changes first"'}>4 · Import ${n ? `${n} change${n === 1 ? '' : 's'}` : ''}</button>`;
 }
 
 function openApiQuery(dryRun) {
   const q = new URLSearchParams();
   const form = new FormData($('#oa-options'));
-  for (const name of ['processor', 'routePrefix', 'group']) if (form.get(name)) q.set(name, form.get(name).trim());
+  for (const name of ['processor', 'routePrefix', 'group', 'documentId']) if (form.get(name)?.trim()) q.set(name, form.get(name).trim());
   for (const tag of (form.get('tag') || '').split(',').map(t => t.trim()).filter(Boolean)) q.append('tag', tag);
-  if (form.get('enabled')) q.set('enabled', 'true');
-  if (form.get('skipInvalid')) q.set('skipInvalid', 'true');
+  for (const name of ['mock', 'enabled', 'skipInvalid']) if (form.get(name)) q.set(name, 'true');
+  if (!form.get('mock')) for (const [tag, processor] of Object.entries(openApiTagMap)) q.append('processorByTag', `${tag}:${processor}`);
+  q.set('mode', $('#oa-mode').value);
   if (dryRun) q.set('dryRun', 'true');
   return q;
 }
@@ -1235,42 +1280,49 @@ async function sendOpenApi(dryRun) {
 async function dryRunOpenApi() {
   const r = await sendOpenApi(true);
   if (!r) return;
-  openApiPlan = r.ok ? r.data : null;
+  openApiPlan = r.ok ? { ...r.data, mode: $('#oa-mode').value } : null;
+  if (r.data?.tags && r.data.tags.join('\n') !== openApiTags.join('\n')) { openApiTags = r.data.tags; renderOpenApiTags(); }
   $('#oa-result').innerHTML = renderOpenApiResult(r, true);
   renderOpenApiFoot();
 }
 
 async function confirmOpenApi() {
   if (!openApiPlan) return;
-  if (!confirm(`Create ${openApiPlan.created} endpoint(s) from the document?`)) return;
+  const p = openApiPlan;
+  const parts = [p.created && `create ${p.created}`, p.updated && `update ${p.updated}`, p.deleted && `DELETE ${p.deleted}`].filter(Boolean).join(', ');
+  if (!confirm(`Import in ${p.mode} mode: ${parts} endpoint(s)?${p.deleted ? '\n\nDeleted endpoints lose their history.' : ''}`)) return;
   const r = await sendOpenApi(false);
   if (!r) return;
   openApiPlan = null;
   $('#oa-result').innerHTML = renderOpenApiResult(r, false);
   renderOpenApiFoot();
-  if (r.ok) { toast(`Created ${r.data.created} endpoint(s)`); await load(); }
+  if (r.ok) { toast(`Imported: ${r.data.created} created, ${r.data.updated} updated, ${r.data.deleted} deleted`); await load(); }
 }
 
 function renderOpenApiResult(r, dryRun) {
   if (r.status !== 200 && r.status !== 422) return `<div class="errors">${esc(problemText(r.data))}</div>`;
   const res = r.data;
-  const counts = [['created', 'Create'], ['skipped', 'Skip'], ['invalid', 'Invalid']]
+  const operations = res.operations.map((o, i) => ({ o, i })).sort((a, b) => ACTION_ORDER.indexOf(a.o.action) - ACTION_ORDER.indexOf(b.o.action));
+  const counts = [['created', 'Create'], ['updated', 'Update'], ['deleted', 'Delete'], ['unchanged', 'Unchanged'], ['skipped', 'Skip'], ['invalid', 'Invalid']]
     .filter(([k]) => res[k]).map(([k, a]) => `<span class="pill a-${a}">${res[k]} ${k}</span>`).join(' ');
   const banner = !res.succeeded
-    ? `<div class="errors"><b>${res.invalid} operation${res.invalid === 1 ? '' : 's'} can't be imported – nothing ${dryRun ? 'would be' : 'was'} created.</b> Tick <b>Skip invalid operations</b> to import the rest.</div>`
-    : dryRun ? (res.created ? '<div class="notice"><span>Dry run – nothing was created yet. Review the operations, then click <b>Create</b>.</span></div>' : '<div class="success">Nothing to create.</div>')
-    : `<div class="success">✓ Created ${res.created} endpoint(s).</div>`;
+    ? `<div class="errors"><b>${res.invalid} operation${res.invalid === 1 ? '' : 's'} can't be imported – nothing ${dryRun ? 'would be' : 'was'} written.</b> Tick <b>Skip invalid operations</b> to import the rest.</div>`
+    : dryRun ? (res.hasChanges ? '<div class="notice"><span>Dry run – nothing was written yet. Review the operations, then click <b>Import</b>.</span></div>' : '<div class="success">Nothing to change – the endpoints already match the document.</div>')
+    : `<div class="success">✓ Imported: ${res.created} created, ${res.updated} updated, ${res.deleted} deleted.</div>`;
   return `${banner}
     ${res.warnings?.length ? `<div class="notice"><div><b>Warnings</b><ul style="margin:4px 0 0;padding-left:18px">${res.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div></div>` : ''}
-    <section class="card"><h3>Operations <span class="spacer"></span>${counts}</h3>
-      <table><thead><tr><th>Action</th><th>Operation</th><th>Not mapped / errors</th><th></th></tr></thead><tbody>
-      ${res.operations.map((o, i) => `<tr>
+    <section class="card"><h3>Operations${res.document ? ` <span class="muted" style="font-weight:normal">of ${esc(res.document)}</span>` : ''} <span class="spacer"></span>${counts}</h3>
+      <table><thead><tr><th>Action</th><th>Operation</th><th class="hide-sm">Processor</th><th>Details</th><th></th></tr></thead><tbody>
+      ${operations.map(({ o, i }) => `<tr>
         <td><span class="pill a-${esc(o.action)}">${esc(o.action)}</span></td>
-        <td><span class="method m-${esc(o.method)}">${esc(o.method)}</span> <code>${esc(o.path)}</code>${o.definition && o.definition.route !== o.path ? ` <span class="muted">→ <code>${esc(o.definition.route)}</code></span>` : ''}${o.operationId ? `<div class="muted" style="font-size:12px">${esc(o.operationId)}</div>` : ''}</td>
+        <td><span class="method m-${esc(o.method)}">${esc(o.method)}</span> <code>${esc(o.path)}</code>${o.definition && o.action !== 'Delete' && o.definition.route !== o.path ? ` <span class="muted">→ <code>${esc(o.definition.route)}</code></span>` : ''}${o.operationId ? `<div class="muted" style="font-size:12px">${esc(o.operationId)}</div>` : ''}</td>
+        <td class="hide-sm">${o.action === 'Delete' || o.action === 'Skip' ? '' : `${o.processor ? `<code>${esc(o.processor)}</code>` : '<span class="muted">none</span>'}<div class="muted" style="font-size:12px" title="${esc(o.processorReason)}">${esc(PROCESSOR_SOURCES[o.processorSource] ?? o.processorSource)}${o.processorSource === 'Tag' || o.processorSource === 'Mock' ? `: ${esc(o.processorReason)}` : ''}</div>`}</td>
         <td>${Object.keys(o.errors || {}).length ? `<ul class="field-error" style="margin:0;padding-left:16px">${Object.entries(o.errors).map(([k, v]) => `<li><code>${esc(k)}</code>: ${esc(v.join(' '))}</li>`).join('')}</ul>` : ''}
+          ${o.reason ? `<div class="muted">${esc(o.reason)}</div>` : ''}
+          ${o.changes?.length ? `<span class="muted">changes:</span> ${o.changes.map(c => `<code>${esc(c)}</code>`).join(', ')}` : ''}
           ${o.unmapped?.length ? `<ul class="muted" style="margin:0;padding-left:16px;font-size:12px">${o.unmapped.map(u => `<li>${esc(u)}</li>`).join('')}</ul>` : ''}</td>
         <td class="actions">${o.definition ? `<button class="small" onclick="toggleOpenApiDefinition(${i})">Definition</button>` : ''}</td>
-      </tr>${o.definition ? `<tr id="oa-def-${i}" hidden><td colspan="4"><pre class="response">${esc(json(o.definition))}</pre></td></tr>` : ''}`).join('')}
+      </tr>${o.definition ? `<tr id="oa-def-${i}" hidden><td colspan="5"><pre class="response">${esc(json(o.definition))}</pre></td></tr>` : ''}`).join('')}
       </tbody></table>
     </section>`;
 }
