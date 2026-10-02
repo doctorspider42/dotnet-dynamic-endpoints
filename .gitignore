@@ -489,3 +489,6 @@ $RECYCLE.BIN/
 # docfx output (docs/docfx.json)
 docs/_site/
 docs/api/
+
+# Claude Code agent worktrees
+.claude/worktrees/
