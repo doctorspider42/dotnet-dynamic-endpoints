@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\samples\08-GitOps\DynamicEndpoints.Samples.GitOps.csproj" Aliases="GitOps" />
     <ProjectReference Include="..\..\samples\09-DraftsHistoryAudit\DynamicEndpoints.Samples.DraftsHistoryAudit.csproj" Aliases="DraftsHistoryAudit" />
     <ProjectReference Include="..\..\samples\10-CachingAndRateLimits\DynamicEndpoints.Samples.CachingAndRateLimits.csproj" Aliases="CachingAndRateLimits" />
+    <ProjectReference Include="..\..\samples\11-Observability\DynamicEndpoints.Samples.Observability.csproj" Aliases="Observability" />
   </ItemGroup>
 
 </Project>

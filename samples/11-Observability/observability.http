@@ -1,0 +1,29 @@
+# samples/11-Observability – start it with: dotnet run --project samples/11-Observability – and watch its console
+@baseUrl = http://localhost:5111
+
+### outcome "processed"
+GET {{baseUrl}}/hello/Ada
+
+### outcome "rejected" – layer "constraints"
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{ "sku": "nope", "quantity": 2 }
+
+### outcome "rejected" – layer "rules"
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{ "sku": "ANV-1", "quantity": 50 }
+
+### outcome "processed", 201
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{ "sku": "ANV-1", "quantity": 2 }
+
+### processor.duration – a 1.2 s processor span
+GET {{baseUrl}}/work?ms=1200
+
+### outcome "error" – the errors counter, spans with status Error, a 500 problem
+GET {{baseUrl}}/boom
