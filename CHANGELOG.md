@@ -34,6 +34,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
     `DynamicEndpointsDbContext` is unchanged.
   - Queryable sinks (`IDynamicEndpointAuditLog`) are served by the admin API: `GET /audit?endpointId=&tenant=&user=&from=&to=&limit=`
     and `GET /{id}/audit`. A tenant's admin API returns only its own entries.
+- **Roslyn analyzers**, shipped inside the `DynamicEndpoints` package (no extra dependency). `DE0001`–`DE0010` report at build time
+  what would otherwise only fail on save or at start-up: abstract processor/validator types in `HandledBy<T>()` / `ValidatedBy<T>()` /
+  `AddProcessor<T>()`, duplicate processor and validator names, a configuration of the wrong class for a typed processor or validator,
+  and invalid literal route templates, `Pattern(…)` regexes (including constructs `NonBacktracking` rejects) and `WithRule(…)` JsonLogic.
+- **Project template.** `dotnet new install DynamicEndpoints.Templates`, then `dotnet new dynamic-endpoints -n MyApi`, creates a
+  minimal API with DynamicEndpoints on EF Core SQLite: the admin API, the dynamic OpenAPI document with Swagger UI, a typed sample
+  processor and a seeder with demo endpoints. Options: `--DynamicEndpointsVersion` and `--no-swagger`.
 
 ## [0.3.0] - 2026-10-02
 
