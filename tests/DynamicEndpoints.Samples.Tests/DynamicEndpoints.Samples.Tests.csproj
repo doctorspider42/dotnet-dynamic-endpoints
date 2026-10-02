@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\samples\05-EfCrud\DynamicEndpoints.Samples.EfCrud.csproj" Aliases="EfCrud" />
     <ProjectReference Include="..\..\samples\06-MultiTenancy\DynamicEndpoints.Samples.MultiTenancy.csproj" Aliases="MultiTenancy" />
     <ProjectReference Include="..\..\samples\07-OpenApiImport\DynamicEndpoints.Samples.OpenApiImport.csproj" Aliases="OpenApiImport" />
+    <ProjectReference Include="..\..\samples\08-GitOps\DynamicEndpoints.Samples.GitOps.csproj" Aliases="GitOps" />
   </ItemGroup>
 
 </Project>
