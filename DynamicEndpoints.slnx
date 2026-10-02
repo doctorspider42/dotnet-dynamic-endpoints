@@ -9,6 +9,7 @@
     <Project Path="samples/07-OpenApiImport/DynamicEndpoints.Samples.OpenApiImport.csproj" />
     <Project Path="samples/08-GitOps/DynamicEndpoints.Samples.GitOps.csproj" />
     <Project Path="samples/09-DraftsHistoryAudit/DynamicEndpoints.Samples.DraftsHistoryAudit.csproj" />
+    <Project Path="samples/10-CachingAndRateLimits/DynamicEndpoints.Samples.CachingAndRateLimits.csproj" />
     <Project Path="samples/DynamicEndpoints.AppHost/DynamicEndpoints.AppHost.csproj" />
     <Project Path="samples/Showcase/DynamicEndpoints.Samples.Showcase.csproj" />
     <Project Path="samples/DynamicEndpoints.ServiceDefaults/DynamicEndpoints.ServiceDefaults.csproj" />

@@ -1,0 +1,38 @@
+# samples/10-CachingAndRateLimits – start it with: dotnet run --project samples/10-CachingAndRateLimits
+@baseUrl = http://localhost:5110
+
+### Cache-Control, ETag – and the output cache: send it twice, "call" stays the same
+# @name price
+GET {{baseUrl}}/prices/ANV-1
+
+### 304 Not Modified – the ETag of the response above (paste it if your client doesn't support response headers)
+GET {{baseUrl}}/prices/ANV-1
+If-None-Match: {{price.response.headers.ETag}}
+
+### One output cache entry per language
+GET {{baseUrl}}/catalog
+Accept-Language: pl
+
+###
+GET {{baseUrl}}/catalog
+Accept-Language: en
+
+### no-store – a new "call" every time
+GET {{baseUrl}}/balance
+
+### 3 per minute – send it four times: 200, 200, 200, 429 with Retry-After
+GET {{baseUrl}}/quotes
+
+### Per API key – 5 per minute, 20 per day
+GET {{baseUrl}}/search?q=anvil
+X-Api-Key: key-a
+
+### …another key, another budget
+GET {{baseUrl}}/search?q=anvil
+X-Api-Key: key-b
+
+### Token bucket: bursts of 2, one more every 10 s
+POST {{baseUrl}}/exports
+
+### The definitions with their caching and rateLimit settings
+GET {{baseUrl}}/api/admin/endpoints
