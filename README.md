@@ -260,7 +260,8 @@ builder.Services.AddDynamicEndpoints().AddFluentValidatorsFromAssemblyContaining
 | Rules | [JsonLogic](https://jsonlogic.com) conditions with an error message, an optional error code and a target parameter |
 | Custom validators | code validators attached to parameters or to the whole request, with optional configuration |
 | Processing | processor name and configuration (JSON) |
-| Security | allow anonymous, require authorization, authorization policy, rate limiting policy |
+| Security | allow anonymous, require authorization, authorization policy, rate limiting policy, or a rate limit and quota of its own |
+| Caching | `Cache-Control` (max age, public/private, no-store), ETags with `304`, server-side output caching |
 | Docs | response schema, request and response examples (documentation only) |
 </details>
 
@@ -454,6 +455,62 @@ app.UseDynamicEndpointsErrorResponses(o => o.AppliesTo = c => c.Request.Path.Sta
   `UseExceptionHandler` handle them instead, set `o.HandleExceptions = false`.
 - Titles are localized like the validation messages. `e.Endpoint` is the dynamic endpoint (`null` for unknown routes).
 - `IDynamicEndpointFilter.OnValidationFailedAsync` still runs afterwards and can replace the result of a single request.
+</details>
+
+<details>
+<summary><b>Response caching: <code>Cache-Control</code>, ETags, output caching</b></summary>
+
+```csharp
+DynamicEndpoint.Get("/prices/{sku}")
+    .Cached(TimeSpan.FromMinutes(1), eTag: true, outputCache: TimeSpan.FromSeconds(30))
+    // or .WithCaching(new DynamicEndpointCaching { MaxAgeSeconds = 60, ETag = true, OutputCacheSeconds = 30, VaryByHeader = ["Accept-Language"] })
+```
+
+```json
+"caching": { "maxAgeSeconds": 60, "eTag": true, "outputCacheSeconds": 30 }
+```
+
+- **`Cache-Control`:** `maxAgeSeconds` and `visibility` (`Public`, or `Private` by default for endpoints that require authorization;
+  those can't be public). `noStore: true` forbids caching, also for non-GET endpoints.
+- **ETags:** computed from the response body. A matching `If-None-Match` gets `304 Not Modified` without a body. Without a max age
+  clients are told to revalidate every time (`no-cache`).
+- **Output caching** (`outputCacheSeconds`, `outputCachePolicy`): ASP.NET Core output caching, so the application needs
+  `services.AddOutputCache()` and `app.UseOutputCache()` (checked on save). The cache key contains the path, the query string
+  (or `varyByQuery`) and the endpoint's header parameters (plus `varyByHeader`). Entries are evicted on every instance when the
+  definition changes. Requests with `Authorization` or cookies are not cached (the framework's default policy).
+- Headers are only added to successful responses. Caching is limited to GET endpoints and documented in OpenAPI
+  (`Cache-Control`/`ETag` headers, `If-None-Match`, `304`).
+</details>
+
+<details>
+<summary><b>Rate limits and quotas in the definition</b></summary>
+
+No named policy needed: the limit lives in the endpoint and is enforced by ASP.NET Core rate limiting.
+
+```csharp
+builder.Services.AddRateLimiter(_ => { });   // once
+app.UseRateLimiter();                        // after UseRouting, when you call it yourself
+
+DynamicEndpoint.Get("/quotes")
+    .RateLimited(10, TimeSpan.FromMinutes(1), RateLimitPartitionKind.Header, "X-Api-Key",
+        quota: new DynamicEndpointQuota { Limit = 10_000, Period = QuotaPeriod.Day });
+```
+
+```json
+"rateLimit": { "algorithm": "SlidingWindow", "permitLimit": 100, "windowSeconds": 60, "segmentsPerWindow": 6,
+               "partitionBy": "User", "quota": { "limit": 5000, "period": "Day" } }
+```
+
+- **Algorithms:** `FixedWindow`, `SlidingWindow`, `TokenBucket` (`permitLimit` is the bucket size, `tokensPerPeriod` the refill),
+  `Concurrency`. `queueLimit` lets requests wait instead of failing.
+- **Partitions:** `IpAddress` (default; use `UseForwardedHeaders` behind a proxy), `User` (anonymous requests by IP), `Header`
+  (e.g. an API key; requests without it by IP) or `Endpoint` (one budget for everybody).
+- **Quota:** a second, long-term limit (`Hour`, `Day`, `Week`, `Month` = 30 days) for the same partitions. Windows start with the
+  first request of a partition, not on calendar boundaries.
+- **Rejections:** `429 Too Many Requests` with `Retry-After`, built by `IDynamicErrorResponseFactory` (`DynamicErrorKind.TooManyRequests`).
+- **Changes:** counters belong to the limit settings. Changing them starts fresh counters, reloads and unrelated edits keep them.
+  Counters are kept in memory per instance, so with N instances a client can get up to N times the limit.
+- A definition uses either `rateLimitingPolicy` (a named policy) or `rateLimit`, not both. OpenAPI documents the limit and the `429`.
 </details>
 
 <details>

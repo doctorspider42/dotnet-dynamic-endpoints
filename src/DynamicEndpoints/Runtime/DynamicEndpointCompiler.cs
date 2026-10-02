@@ -47,6 +47,8 @@ internal sealed partial class DynamicEndpointCompiler(
         var rules = CompileRules(d, errors);
         var processorName = await ValidateProcessorAsync(d, errors, cancellationToken);
         await ValidateSecurityAsync(d, errors);
+        ResponseCaching.Validate(d, services, errors);
+        RateLimiting.Validate(d, errors);
 
         await using var scope = scopeFactory.CreateAsyncScope();
         for (var i = 0; i < parameters.Count; i++)
@@ -76,6 +78,8 @@ internal sealed partial class DynamicEndpointCompiler(
             Rules = rules,
             Validators = requestValidators,
             Configuration = d.ProcessorConfig?.DeepClone() as JsonObject ?? new JsonObject(),
+            CacheControl = ResponseCaching.CacheControl(d),
+            VaryHeaders = d.Caching is { NoStore: false } ? ResponseCaching.VaryHeaders(d) : [],
         };
         return new CompilationResult(compiled, errors);
     }

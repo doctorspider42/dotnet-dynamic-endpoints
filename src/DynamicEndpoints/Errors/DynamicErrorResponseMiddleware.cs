@@ -88,6 +88,7 @@ internal sealed class DynamicErrorResponseMiddleware(
             StatusCodes.Status405MethodNotAllowed => (DynamicErrorKind.MethodNotAllowed, Title("title.methodNotAllowed")),
             StatusCodes.Status413PayloadTooLarge => (DynamicErrorKind.PayloadTooLarge, Title("title.payloadTooLarge")),
             StatusCodes.Status415UnsupportedMediaType => (DynamicErrorKind.UnsupportedMediaType, Title("title.unsupportedMediaType")),
+            StatusCodes.Status429TooManyRequests => (DynamicErrorKind.TooManyRequests, Title("title.tooManyRequests")),
             StatusCodes.Status500InternalServerError => (DynamicErrorKind.Exception, Title("title.error")),
             var status => (DynamicErrorKind.Other, Title("title.status", status)),
         };

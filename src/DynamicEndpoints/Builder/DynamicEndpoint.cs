@@ -40,6 +40,39 @@ public sealed class DynamicEndpoint
     public DynamicEndpoint RequireAuthorization(string? policy = null) =>
         Set(d => d with { RequireAuthorization = true, AuthorizationPolicy = policy });
     public DynamicEndpoint RequireRateLimiting(string policy) => Set(d => d with { RateLimitingPolicy = policy });
+
+    /// <summary>A rate limit defined in the endpoint itself (needs <c>AddRateLimiter()</c> / <c>UseRateLimiter()</c> in the application).</summary>
+    public DynamicEndpoint WithRateLimit(DynamicEndpointRateLimit rateLimit) => Set(d => d with { RateLimit = rateLimit });
+
+    /// <summary>
+    /// At most <paramref name="permitLimit"/> requests per <paramref name="window"/> (fixed window) for each partition – by default each
+    /// client IP address – optionally with a long-term quota.
+    /// </summary>
+    public DynamicEndpoint RateLimited(
+        int permitLimit,
+        TimeSpan window,
+        RateLimitPartitionKind partitionBy = RateLimitPartitionKind.IpAddress,
+        string? partitionHeader = null,
+        DynamicEndpointQuota? quota = null) =>
+        WithRateLimit(new DynamicEndpointRateLimit
+        {
+            PermitLimit = permitLimit,
+            WindowSeconds = (int)window.TotalSeconds,
+            PartitionBy = partitionBy,
+            PartitionHeader = partitionHeader,
+            Quota = quota,
+        });
+
+    /// <summary>Response caching: <c>Cache-Control</c>, ETags and output caching – see <see cref="DynamicEndpointCaching"/>.</summary>
+    public DynamicEndpoint WithCaching(DynamicEndpointCaching caching) => Set(d => d with { Caching = caching });
+
+    /// <summary>Lets clients reuse responses for <paramref name="maxAge"/>, optionally with ETags and server-side output caching.</summary>
+    public DynamicEndpoint Cached(TimeSpan maxAge, bool eTag = false, TimeSpan? outputCache = null) => WithCaching(new DynamicEndpointCaching
+    {
+        MaxAgeSeconds = (int)maxAge.TotalSeconds,
+        ETag = eTag,
+        OutputCacheSeconds = outputCache is { } duration ? (int)duration.TotalSeconds : null,
+    });
     public DynamicEndpoint WithResponseSchema(string jsonSchema) => Set(d => d with { ResponseSchema = ParseObject(jsonSchema) });
 
     /// <summary>Example request body for the OpenAPI document, as JSON or as an object to serialize.</summary>

@@ -147,6 +147,9 @@ internal sealed class DynamicEndpointRuntime(
             builder.Metadata.Add(new EnableRateLimitingAttribute(d.RateLimitingPolicy));
         }
 
+        RateLimiting.AddMetadata(builder, d);
+        ResponseCaching.AddMetadata(builder, d);
+
         conventions.Apply(builder, b => options.Value.ConfigureEndpoint?.Invoke(b, d));
         return builder.Build();
     }

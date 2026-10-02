@@ -15,6 +15,16 @@ and the project uses [Semantic Versioning](https://semver.org/).
   request built from parameter examples, defaults, allowed values and constraints, plus ready-made curl, HTTPie and C# `HttpClient`
   snippets. Required documented headers and the credentials of the security schemes appear as placeholders. In code:
   `IDynamicEndpointSnippetGenerator`.
+- **Response caching per endpoint.** `Caching` in the definition (`.Cached(…)` / `.WithCaching(…)`): `Cache-Control` max age and
+  visibility (private by default for endpoints that require authorization), `noStore`, ETags with `304 Not Modified`, and
+  server-side output caching through ASP.NET Core `OutputCache` (`outputCacheSeconds`, `outputCachePolicy`, `varyByQuery`,
+  `varyByHeader`; header parameters are always part of the key). Cached entries are evicted on every instance when the definition
+  changes. Documented in OpenAPI (`Cache-Control`/`ETag` headers, `If-None-Match`, `304`).
+- **Rate limits and quotas in the definition.** `RateLimit` (`.RateLimited(…)` / `.WithRateLimit(…)`): fixed window, sliding window,
+  token bucket or concurrency limits, partitioned by IP address, user, a header such as an API key, or per endpoint, with an
+  optional long-term quota (hour/day/week/month). Built on ASP.NET Core rate limiting (`AddRateLimiter()` + `UseRateLimiter()`);
+  counters start over when the limit settings change and survive reloads. Rejections are `429` with `Retry-After`, formatted by
+  `IDynamicErrorResponseFactory` (new `DynamicErrorKind.TooManyRequests`, also used for empty 429 responses), and documented in OpenAPI.
 
 ## [0.3.0] - 2026-10-02
 

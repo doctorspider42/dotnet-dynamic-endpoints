@@ -67,7 +67,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
 
         var processor = context.RequestServices.GetRequiredKeyedService<IDynamicEndpointProcessor>(endpoint.ProcessorName);
         var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context, items));
-        await (result ?? Results.Empty).ExecuteAsync(context);
+        await ResponseCaching.ExecuteAsync(context, endpoint, result ?? Results.Empty);
     }
 
     private static async Task RejectAsync(

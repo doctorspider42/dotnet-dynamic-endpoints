@@ -36,6 +36,7 @@ internal static class BuiltInValidationMessages
                 ["title.forbidden"] = "Forbidden",
                 ["title.notFound"] = "Not found",
                 ["title.methodNotAllowed"] = "Method not allowed",
+                ["title.tooManyRequests"] = "Too many requests",
                 ["title.error"] = "An unexpected error occurred.",
                 ["title.status"] = "The request failed with status {0}.",
 
@@ -109,6 +110,7 @@ internal static class BuiltInValidationMessages
                 ["title.forbidden"] = "Brak uprawnień",
                 ["title.notFound"] = "Nie znaleziono",
                 ["title.methodNotAllowed"] = "Niedozwolona metoda",
+                ["title.tooManyRequests"] = "Zbyt wiele żądań",
                 ["title.error"] = "Wystąpił nieoczekiwany błąd.",
                 ["title.status"] = "Żądanie zakończyło się statusem {0}.",
 
