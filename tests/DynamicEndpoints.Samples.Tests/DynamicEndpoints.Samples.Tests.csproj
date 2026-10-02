@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\samples\06-MultiTenancy\DynamicEndpoints.Samples.MultiTenancy.csproj" Aliases="MultiTenancy" />
     <ProjectReference Include="..\..\samples\07-OpenApiImport\DynamicEndpoints.Samples.OpenApiImport.csproj" Aliases="OpenApiImport" />
     <ProjectReference Include="..\..\samples\08-GitOps\DynamicEndpoints.Samples.GitOps.csproj" Aliases="GitOps" />
+    <ProjectReference Include="..\..\samples\09-DraftsHistoryAudit\DynamicEndpoints.Samples.DraftsHistoryAudit.csproj" Aliases="DraftsHistoryAudit" />
   </ItemGroup>
 
 </Project>
