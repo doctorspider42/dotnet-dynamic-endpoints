@@ -9,7 +9,7 @@
   <!-- NuGet package metadata -->
   <PropertyGroup>
     <!-- major.minor is released from here; the patch number is set by the release workflow on every push to main -->
-    <VersionPrefix>0.3.0</VersionPrefix>
+    <VersionPrefix>0.4.0</VersionPrefix>
     <Authors>Pawel Pajak</Authors>
     <Copyright>Copyright (c) 2026 Pawel Pajak</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

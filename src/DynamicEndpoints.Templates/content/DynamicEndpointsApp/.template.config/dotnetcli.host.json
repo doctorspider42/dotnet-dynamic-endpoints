@@ -1,6 +1,10 @@
 {
   "$schema": "http://json.schemastore.org/dotnetcli.host",
   "symbolInfo": {
+    "NoAdminUI": {
+      "longName": "no-admin-ui",
+      "shortName": ""
+    },
     "NoSwagger": {
       "longName": "no-swagger",
       "shortName": ""

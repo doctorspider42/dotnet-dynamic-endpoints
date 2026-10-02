@@ -4,7 +4,7 @@
   "classifications": [ "Web", "API" ],
   "identity": "DynamicEndpoints.Templates.WebApi",
   "name": "ASP.NET Core API with DynamicEndpoints",
-  "description": "A minimal API with runtime-defined endpoints (DynamicEndpoints), EF Core SQLite persistence, admin API, OpenAPI and Swagger UI.",
+  "description": "A minimal API with runtime-defined endpoints (DynamicEndpoints), EF Core SQLite persistence, admin API and panel, OpenAPI and Swagger UI.",
   "shortName": "dynamic-endpoints",
   "sourceName": "DynamicEndpointsApp",
   "defaultName": "DynamicEndpointsApp",
@@ -18,8 +18,14 @@
       "type": "parameter",
       "datatype": "string",
       "description": "Version (or floating range) of the DynamicEndpoints packages to reference.",
-      "defaultValue": "0.3.*",
+      "defaultValue": "0.4.*",
       "replaces": "0.0.0-dynamic-endpoints-version"
+    },
+    "NoAdminUI": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "Leave out the admin panel (DynamicEndpoints.AdminUI).",
+      "defaultValue": "false"
     },
     "NoSwagger": {
       "type": "parameter",

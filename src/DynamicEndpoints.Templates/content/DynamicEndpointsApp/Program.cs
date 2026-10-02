@@ -39,6 +39,18 @@ app.MapDynamicEndpoints();
 // Generic admin REST API to create, change and delete endpoints at runtime.
 // Secure it before going live, e.g. .RequireAuthorization("admin").
 app.MapDynamicEndpointsAdmin("/api/admin/endpoints");
+#if (!NoAdminUI)
+
+// The admin panel on top of it: list, editor, drafts, history and a "Try" console. Secure it like the admin API.
+app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints", options =>
+{
+    options.Title = "DynamicEndpointsApp – endpoints";
+    options.OpenApiUrl = "/openapi/dynamic.json";
+#if (!NoSwagger)
+    options.SwaggerUrl = "/swagger";
+#endif
+});
+#endif
 
 app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");
 app.MapOpenApi("/openapi/{documentName}.json");
@@ -51,6 +63,11 @@ app.UseSwaggerUI(options =>
     options.DocumentTitle = "DynamicEndpointsApp – Swagger UI";
 });
 
+#endif
+
+#if (!NoAdminUI)
+app.MapGet("/", () => Results.Redirect("/admin/")).ExcludeFromDescription();
+#elif (!NoSwagger)
 app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 #else
 app.MapGet("/", () => Results.Redirect("/openapi/dynamic.json")).ExcludeFromDescription();

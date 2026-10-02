@@ -9,6 +9,9 @@
   <ItemGroup>
     <PackageReference Include="DynamicEndpoints" Version="0.0.0-dynamic-endpoints-version" />
     <PackageReference Include="DynamicEndpoints.EntityFrameworkCore" Version="0.0.0-dynamic-endpoints-version" />
+<!--#if (!NoAdminUI) -->
+    <PackageReference Include="DynamicEndpoints.AdminUI" Version="0.0.0-dynamic-endpoints-version" />
+<!--#endif -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
 <!--#if (!NoSwagger) -->

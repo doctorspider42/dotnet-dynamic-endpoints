@@ -111,8 +111,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
   `AddProcessor<T>()`, duplicate processor and validator names, a configuration of the wrong class for a typed processor or validator,
   and invalid literal route templates, `Pattern(…)` regexes (including constructs `NonBacktracking` rejects) and `WithRule(…)` JsonLogic.
 - **Project template.** `dotnet new install DynamicEndpoints.Templates`, then `dotnet new dynamic-endpoints -n MyApi`, creates a
-  minimal API with DynamicEndpoints on EF Core SQLite: the admin API, the dynamic OpenAPI document with Swagger UI, a typed sample
-  processor and a seeder with demo endpoints. Options: `--DynamicEndpointsVersion` and `--no-swagger`.
+  minimal API with DynamicEndpoints on EF Core SQLite: the admin API with the admin panel at `/admin`, the dynamic OpenAPI document
+  with Swagger UI, a typed sample processor and a seeder with demo endpoints. Options: `--DynamicEndpointsVersion`, `--no-admin-ui`
+  and `--no-swagger`.
 - **Documentation site** (docfx, with an API reference from the XML docs) at
   https://doctorspider42.github.io/dotnet-dynamic-endpoints, built from `docs/` and published by `.github/workflows/docs.yml`.
   The README is now a shorter landing page that links to it.
