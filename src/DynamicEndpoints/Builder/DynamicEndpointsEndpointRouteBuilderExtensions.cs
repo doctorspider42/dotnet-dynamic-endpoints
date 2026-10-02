@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DynamicEndpoints;
+using DynamicEndpoints.Audit;
 using DynamicEndpoints.Runtime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -111,6 +112,8 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
                 return TypedResults.NoContent();
             })
             .WithSummary("Re-reads all definitions from the store.");
+
+        DynamicEndpointsAuditApi.Map(group);
 
         return group;
     }

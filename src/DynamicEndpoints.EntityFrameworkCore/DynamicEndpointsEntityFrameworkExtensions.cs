@@ -40,4 +40,13 @@ public static class DynamicEndpointsEntityFrameworkExtensions
     public static IDynamicEndpointsBuilder MigrateOnStartup<TContext>(this IDynamicEndpointsBuilder builder)
         where TContext : DbContext =>
         builder.AddStoreInitializer<MigrateDatabaseInitializer<TContext>>();
+
+    /// <summary>
+    /// Writes audit entries to a table of your own context and makes them queryable through the admin API. Add the table with
+    /// <c>modelBuilder.ApplyDynamicEndpointsAuditConfiguration()</c> and your migrations. Entries are saved by their own
+    /// <c>SaveChanges</c> (on a context of their own scope), after the change was applied.
+    /// </summary>
+    public static DynamicEndpointsAuditBuilder ToEntityFramework<TContext>(this DynamicEndpointsAuditBuilder builder)
+        where TContext : DbContext =>
+        builder.To<EntityFrameworkDynamicEndpointAuditLog<TContext>>(ServiceLifetime.Scoped);
 }

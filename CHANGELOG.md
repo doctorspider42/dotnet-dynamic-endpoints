@@ -25,6 +25,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
   - OpenAPI: `IDynamicOpenApiDocumentProvider.GetDocument(tenant)`, and `MapDynamicEndpointsOpenApi("/openapi/{tenant}/dynamic.json")`
     serves one document per tenant.
   - The tenant is stored in the serialized definition, so existing databases need no migration.
+- **Audit log.** `AddAuditLog()` records every change made through this instance's manager (change events with origin `Local`, so
+  once per change): who (the user of the HTTP request), what, when, and a property-by-property diff
+  (`parameters[0].maxLength: 5 → 10`), optionally with the complete definitions before and after.
+  - Sinks: `ILogger` by default, `a.ToMemory()` (`InMemoryDynamicEndpointAuditLog`, for tests and development), your own
+    `IDynamicEndpointAuditSink` with `a.To<T>()`, and in `DynamicEndpoints.EntityFrameworkCore` `a.ToEntityFramework<TContext>()` – a
+    table in your own context, added with `modelBuilder.ApplyDynamicEndpointsAuditConfiguration()`. The bundled
+    `DynamicEndpointsDbContext` is unchanged.
+  - Queryable sinks (`IDynamicEndpointAuditLog`) are served by the admin API: `GET /audit?endpointId=&tenant=&user=&from=&to=&limit=`
+    and `GET /{id}/audit`. A tenant's admin API returns only its own entries.
 
 ## [0.3.0] - 2026-10-02
 
