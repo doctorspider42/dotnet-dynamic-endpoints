@@ -19,10 +19,13 @@
     <h2>Endpoints</h2>
     <span class="muted" id="count"></span>
     <span class="spacer"></span>
+    <select id="tenant-filter" title="Tenant" aria-label="Tenant" style="width:auto" onchange="setTenantFilter(this.value)" hidden></select>
     <input id="filter" type="search" placeholder="Filter…" class="hide-sm" style="width:200px" oninput="renderList()">
+    <span id="tools" class="tools"></span>
     <button onclick="reloadFromStore()" title="Re-read definitions from the store">↻ Reload</button>
     <button class="primary" onclick="openEditor()">＋ New endpoint</button>
   </div>
+  <div id="selection" class="notice" hidden></div>
   <div id="list"></div>
 </main>
 

@@ -19,6 +19,17 @@ public interface IDynamicEndpointSnippetGenerator
 
     /// <summary>The example request plus curl, HTTPie and C# <c>HttpClient</c> snippets.</summary>
     DynamicEndpointSnippets Generate(DynamicEndpointDefinition definition, string baseUrl);
+
+    /// <summary>
+    /// The example request as <paramref name="tenant"/> sends it – for shared endpoints; an endpoint of a tenant always uses its own.
+    /// With multi-tenancy the tenant is filled into the tenant route prefix and sent in the header of a <see cref="HeaderTenantResolver"/>.
+    /// </summary>
+    DynamicEndpointRequestExample CreateExample(DynamicEndpointDefinition definition, string baseUrl, string? tenant) =>
+        CreateExample(definition, baseUrl);
+
+    /// <summary>The example request of <paramref name="tenant"/> plus curl, HTTPie and C# <c>HttpClient</c> snippets.</summary>
+    DynamicEndpointSnippets Generate(DynamicEndpointDefinition definition, string baseUrl, string? tenant) =>
+        Generate(definition, baseUrl);
 }
 
 /// <summary>A name/value pair of a query string or header.</summary>
@@ -55,15 +66,21 @@ public sealed record DynamicEndpointRequestExample
 
 public sealed record DynamicEndpointSnippets(DynamicEndpointRequestExample Request, string Curl, string HttpIe, string CSharp);
 
-internal sealed class DynamicEndpointSnippetGenerator(IOptions<DynamicEndpointsOptions> options) : IDynamicEndpointSnippetGenerator
+internal sealed class DynamicEndpointSnippetGenerator(
+    IOptions<DynamicEndpointsOptions> options,
+    IEnumerable<IDynamicEndpointTenantResolver> tenantResolvers) : IDynamicEndpointSnippetGenerator
 {
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
-    public DynamicEndpointRequestExample CreateExample(DynamicEndpointDefinition definition, string baseUrl)
+    public DynamicEndpointRequestExample CreateExample(DynamicEndpointDefinition definition, string baseUrl) =>
+        CreateExample(definition, baseUrl, tenant: null);
+
+    public DynamicEndpointRequestExample CreateExample(DynamicEndpointDefinition definition, string baseUrl, string? tenant)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(baseUrl);
         var d = DefinitionNormalizer.Normalize(definition);
+        tenant = d.Tenant ?? tenant;
         var included = d.Parameters.Where(p => p.Required || p.Example is not null || p.Default is null).ToList();
 
         var query = new List<DynamicEndpointExampleValue>();
@@ -98,6 +115,7 @@ internal sealed class DynamicEndpointSnippetGenerator(IOptions<DynamicEndpointsO
         }
 
         AddCredentials(d, openApi, headers);
+        baseUrl = AddTenant(baseUrl.TrimEnd('/'), tenant, headers);
 
         string? contentType = null;
         JsonNode? body = null;
@@ -166,10 +184,35 @@ internal sealed class DynamicEndpointSnippetGenerator(IOptions<DynamicEndpointsO
         };
     }
 
-    public DynamicEndpointSnippets Generate(DynamicEndpointDefinition definition, string baseUrl)
+    public DynamicEndpointSnippets Generate(DynamicEndpointDefinition definition, string baseUrl) =>
+        Generate(definition, baseUrl, tenant: null);
+
+    public DynamicEndpointSnippets Generate(DynamicEndpointDefinition definition, string baseUrl, string? tenant)
     {
-        var request = CreateExample(definition, baseUrl);
+        var request = CreateExample(definition, baseUrl, tenant);
         return new DynamicEndpointSnippets(request, Curl(request), HttpIe(request), CSharp(request));
+    }
+
+    // With multi-tenancy a request carries its tenant: in the tenant route prefix and/or the tenant header.
+    private string AddTenant(string baseUrl, string? tenant, List<DynamicEndpointExampleValue> headers)
+    {
+        var tenancy = options.Value.Tenancy;
+        if (!tenancy.Enabled)
+        {
+            return baseUrl;
+        }
+
+        tenant = DynamicEndpointsTenancyOptions.IsValidTenant(tenant) ? tenant : null;
+        if (tenant is not null && tenantResolvers.OfType<HeaderTenantResolver>().FirstOrDefault() is { } resolver &&
+            !headers.Any(h => string.Equals(h.Name, resolver.HeaderName, StringComparison.OrdinalIgnoreCase)))
+        {
+            headers.Insert(0, new DynamicEndpointExampleValue(resolver.HeaderName, tenant));
+        }
+
+        // Without a tenant the prefix keeps its placeholder, like the OpenAPI document of the shared endpoints.
+        return tenancy is { RoutePrefix: { } prefix, RouteParameter: { } parameter }
+            ? baseUrl + (tenant is null ? prefix : prefix.Replace("{" + parameter + "}", Uri.EscapeDataString(tenant), StringComparison.OrdinalIgnoreCase))
+            : baseUrl;
     }
 
     private static void AddCredentials(DynamicEndpointDefinition d, DynamicEndpointsOpenApiOptions openApi, List<DynamicEndpointExampleValue> headers)

@@ -2,13 +2,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Routing;
 
 namespace DynamicEndpoints.AdminUI;
 
 internal sealed record AdminUIAsset(byte[] Content, string ContentType, string ETag);
 
 /// <summary>The panel's files, embedded in the assembly – no static files middleware, nothing to copy.</summary>
-internal static class AdminUIAssets
+internal static partial class AdminUIAssets
 {
     private static readonly Dictionary<string, AdminUIAsset> Assets = Load();
     private static readonly string Index = Encoding.UTF8.GetString(Read("index.html"));
@@ -25,26 +27,46 @@ internal static class AdminUIAssets
 
     public static bool TryGet(string file, out AdminUIAsset asset) => Assets.TryGetValue(file, out asset!);
 
-    public static string RenderIndex(string pathBase, string root, string adminApiPath, DynamicEndpointsAdminUIOptions options)
+    public static string RenderIndex(string pathBase, string root, string adminApiPath, DynamicEndpointsAdminUIOptions options,
+        RouteValueDictionary? routeValues = null)
     {
-        string Url(string? path) => path is null || Uri.IsWellFormedUriString(path, UriKind.Absolute) ? path ?? string.Empty
-            : pathBase + "/" + path.TrimStart('/');
+        // Route parameters of the panel's pattern (/tenants/{tenant}/admin) are filled into the paths; others stay for the script.
+        string Fill(string path) => Placeholder().Replace(path, m =>
+            routeValues is not null && routeValues.TryGetValue(m.Groups[1].Value, out var value) && value?.ToString() is { Length: > 0 } text
+                ? Uri.EscapeDataString(text)
+                : m.Value);
+
+        string? Url(string? path)
+        {
+            if (path is null)
+            {
+                return null;
+            }
+
+            path = Fill(path);
+            return Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? path : pathBase + "/" + path.TrimStart('/');
+        }
 
         var config = JsonSerializer.Serialize(new
         {
             title = options.Title,
             apiPath = Url(adminApiPath),
             pathBase,
-            swaggerUrl = options.SwaggerUrl is null ? null : Url(options.SwaggerUrl),
-            openApiUrl = options.OpenApiUrl is null ? null : Url(options.OpenApiUrl),
+            swaggerUrl = Url(options.SwaggerUrl),
+            openApiUrl = Url(options.OpenApiUrl),
+            tenantSwaggerUrl = Url(options.TenantSwaggerUrl),
+            tenantOpenApiUrl = Url(options.TenantOpenApiUrl),
         }, ConfigJson);
 
         return Index
             .Replace("__TITLE__", HtmlEncoder.Default.Encode(options.Title), StringComparison.Ordinal)
-            .Replace("__BASE__", HtmlEncoder.Default.Encode(pathBase + root), StringComparison.Ordinal)
+            .Replace("__BASE__", HtmlEncoder.Default.Encode(pathBase + Fill(root)), StringComparison.Ordinal)
             .Replace("__VERSION__", Version, StringComparison.Ordinal)
             .Replace("__CONFIG__", config, StringComparison.Ordinal);
     }
+
+    [GeneratedRegex(@"\{([A-Za-z_][A-Za-z0-9_]*)\}")]
+    private static partial Regex Placeholder();
 
     private static Dictionary<string, AdminUIAsset> Load()
     {

@@ -118,6 +118,37 @@ and the project uses [Semantic Versioning](https://semver.org/).
   The README is now a shorter landing page that links to it.
 - **Benchmarks** in `tests/DynamicEndpoints.Benchmarks` (BenchmarkDotNet): dynamic endpoints vs. equivalent minimal APIs, and the
   cost of a routing table swap with 10, 100 and 1000 endpoints. Results are in the README.
+- **`GET /info` of the admin API** (`DynamicEndpointsAdminInfo`): whether multi-tenancy is on (with the tenant route prefix and
+  header), the tenant of a tenant admin API, whether the store keeps drafts and history, whether a queryable audit log is
+  configured, and the available text formats – so clients (the admin panel) show only what works.
+- **Snippets with tenants.** With multi-tenancy, example requests and snippets fill the tenant into the tenant route prefix and send
+  the header of `FromHeader(…)`. An endpoint of a tenant uses its own; for shared endpoints `?tenant=` picks one (a tenant admin API
+  always uses its tenant). `IDynamicEndpointSnippetGenerator` has `CreateExample`/`Generate` overloads with a tenant.
+- **Admin panel: the rest of the admin API.** The panel reads `GET /info` and shows only what the server supports.
+  - "Try" console: example values and curl / HTTPie / C# snippets come from the server's snippet generator (`GET /{id}/snippets`,
+    and `POST /snippets` with the entered values as you type), so the panel and the API never disagree; servers without it fall
+    back to the generator in the browser. The editor's **Code** button previews the request of the unsaved definition. Responses
+    show `Cache-Control`, `ETag` and `Retry-After`.
+  - Editor: **response caching** and **rate limit / quota** sections, and **forms for the built-in processors** (`http-forward`,
+    `webhook`, `response`, `sql-query`; JSON for the others, switchable). Server validation errors appear under the field they
+    belong to, configuration errors under the field they name; the error list links to the fields.
+  - **Export** (all, shown or selected endpoints; JSON or YAML) with a preview and download, and **import** of a file or pasted text
+    in create / upsert / sync mode: a dry run lists what would be created, updated (with the changed properties), deleted or
+    skipped and the invalid endpoints with their errors; the real import needs a successful dry run and a confirmation.
+  - **OpenAPI import wizard**: document, options (processor, route prefix, group, tags, enabled, skip invalid), dry run with the
+    operations, what couldn't be mapped and errors, then confirmation.
+  - **Multi-tenancy**: a tenant filter on the list (`GET /?tenant=`, `GET /tenants`), a tenant column and a Tenant field in the
+    editor; "Try" sends the tenant header / fills the tenant route prefix. Pointed at `MapDynamicEndpointsTenantAdmin`, the panel
+    manages that tenant only.
+  - **Audit**: an audit view per endpoint and a global audit log with filters (endpoint, tenant, user, time range), showing who,
+    when, what and before → after per property. Hidden when the server has no queryable audit log.
+  - Selection checkboxes in the list.
+- `MapDynamicEndpointsAdminUI` takes patterns with route parameters, filled into the admin API path and links:
+  `app.MapDynamicEndpointsAdminUI("/admin/tenants/{tenant}", "/api/admin/tenants/{tenant}/endpoints")` is a tenant's own panel.
+  New options `TenantOpenApiUrl` and `TenantSwaggerUrl` (with `{tenant}`) make the header links follow the tenant picked in the panel.
+- The sample registers the built-in processors, `sql-query` on its own database, YAML, multi-tenancy (`X-Tenant` header) with a
+  tenant admin API and panel (`/admin/tenants/acme/`), per-tenant OpenAPI documents, rate limiting and output caching, and seeds
+  a cached and rate-limited `GET /products/{sku}`, an SQL report and a tenant endpoint.
 
 ### Changed
 

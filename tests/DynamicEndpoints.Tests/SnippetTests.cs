@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DynamicEndpoints.Tests;
@@ -104,5 +105,40 @@ public sealed class SnippetTests
         Assert.Equal(HttpStatusCode.NotFound, (await host.Client.GetAsync($"/admin/endpoints/{Guid.NewGuid()}/snippets")).StatusCode);
         var created = await host.Manager.CreateAsync(DynamicEndpoint.Get("/a").HandledBy("echo"));
         Assert.Equal(HttpStatusCode.BadRequest, (await host.Client.GetAsync($"/admin/endpoints/{created.Id}/snippets?baseUrl=ftp://x")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Snippets_carry_the_tenant_in_the_route_prefix_and_the_tenant_header()
+    {
+        await using var host = await TestHost.StartAsync(
+            configure: b => b.UseMultiTenancy(t => t.FromHeader("X-Tenant").FromRoutePrefix("/t/{tenant}")),
+            configureApp: app => app.MapDynamicEndpointsTenantAdmin("/admin/tenants/{tenant}/endpoints"));
+        var own = await host.Manager.CreateAsync(DynamicEndpoint.Get("/orders").HandledBy("echo").Build() with { Tenant = "acme" });
+        var shared = await host.Manager.CreateAsync(DynamicEndpoint.Get("/status").HandledBy("echo"));
+
+        async Task<JsonNode> RequestAsync(string url) => (await host.Client.GetFromJsonAsync<JsonObject>(url))!["request"]!;
+        static string? Header(JsonNode request, string name) =>
+            request["headers"]!.AsArray().FirstOrDefault(h => h!["name"]!.GetValue<string>() == name)?["value"]?.GetValue<string>();
+
+        // An endpoint of a tenant always uses its own tenant.
+        var request = await RequestAsync($"/admin/endpoints/{own.Id}/snippets?baseUrl=https://api.example.com&tenant=globex");
+        Assert.Equal("https://api.example.com/t/acme/orders", request["url"]!.GetValue<string>());
+        Assert.Equal("acme", Header(request, "X-Tenant"));
+
+        // A shared endpoint as seen by the tenant of ?tenant=, or with the placeholder.
+        request = await RequestAsync($"/admin/endpoints/{shared.Id}/snippets?baseUrl=https://api.example.com&tenant=globex");
+        Assert.Equal("https://api.example.com/t/globex/status", request["url"]!.GetValue<string>());
+        Assert.Equal("globex", Header(request, "X-Tenant"));
+        request = await RequestAsync($"/admin/endpoints/{shared.Id}/snippets?baseUrl=https://api.example.com");
+        Assert.Equal("https://api.example.com/t/{tenant}/status", request["url"]!.GetValue<string>());
+        Assert.Null(Header(request, "X-Tenant"));
+
+        // A tenant's admin API shows requests of its tenant.
+        var preview = await host.Client.PostAsJsonAsync("/admin/tenants/initech/endpoints/snippets?baseUrl=http://x&tenant=globex",
+            new { method = "GET", route = "/draft" });
+        request = (await preview.Content.ReadFromJsonAsync<JsonObject>())!["request"]!;
+        Assert.Equal("http://x/t/initech/draft", request["url"]!.GetValue<string>());
+        Assert.Contains("-H 'X-Tenant: acme'", (await host.Client.GetFromJsonAsync<JsonObject>(
+            $"/admin/tenants/acme/endpoints/{own.Id}/snippets"))!["curl"]!.GetValue<string>());
     }
 }
