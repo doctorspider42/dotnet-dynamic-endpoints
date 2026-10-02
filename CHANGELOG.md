@@ -72,7 +72,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
   - `DynamicHttpProcessorOptions`: named HTTP client, `AllowedHosts` against SSRF (checked on save and per call), response size limit.
 - **`DynamicEndpoints.Sql`**, a new package: `AddSqlQueryProcessor(…)` registers `sql-query`, a read-only SQL processor for any
   ADO.NET provider. Request values are always bound as parameters; single `SELECT`/`WITH` statements only, data-changing keywords
-  rejected on save and before every run, every query in a rolled-back transaction. See the package README for the security notes.
+  rejected on save and before every run, every query in a rolled-back transaction. With multi-tenancy, a tenant's endpoints can
+  only use connections assigned to it with `o.AllowTenants(connection, tenants…)` (`ConnectionTenants`), checked on save and before
+  every run, so a tenant's admin can't query the application's or another tenant's database. See the package README for the
+  security notes.
+- `IDynamicEndpointProcessor.ValidateConfiguration(configuration, definition)` and `DynamicEndpointProcessor<T>.Validate(config, definition)`:
+  configuration checks that depend on the definition, e.g. its tenant. Default implementations call the existing overloads.
 - **Response caching per endpoint.** `Caching` in the definition (`.Cached(…)` / `.WithCaching(…)`): `Cache-Control` max age and
   visibility (private by default for endpoints that require authorization), `noStore`, ETags with `304 Not Modified`, and
   server-side output caching through ASP.NET Core `OutputCache` (`outputCacheSeconds`, `outputCachePolicy`, `varyByQuery`,

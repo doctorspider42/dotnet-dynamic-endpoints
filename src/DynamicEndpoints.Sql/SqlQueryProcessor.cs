@@ -50,6 +50,30 @@ public sealed class SqlQueryProcessorOptions
     public IDictionary<string, Func<IServiceProvider, DbConnection>> Connections { get; } =
         new Dictionary<string, Func<IServiceProvider, DbConnection>>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The tenants that may use a connection, by connection name (multi-tenancy). Endpoints of a tenant can only use connections
+    /// assigned to it – unassigned ones, the default connection included, are for shared endpoints only, so a tenant's admin can't
+    /// query the application's or another tenant's database. Checked on save and before every run. Use <see cref="AllowTenants"/>.
+    /// </summary>
+    public IDictionary<string, ISet<string>> ConnectionTenants { get; } = new Dictionary<string, ISet<string>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Lets the endpoints of <paramref name="tenants"/> use the connection <paramref name="connection"/> (<c>""</c>: the default one).</summary>
+    public SqlQueryProcessorOptions AllowTenants(string connection, params string[] tenants)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (!ConnectionTenants.TryGetValue(connection, out var allowed))
+        {
+            ConnectionTenants[connection] = allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        allowed.UnionWith(tenants);
+        return this;
+    }
+
+    /// <summary>Shared endpoints (no tenant) may use every connection; a tenant's endpoints only those assigned to it.</summary>
+    internal bool IsAvailable(string connection, string? tenant) =>
+        tenant is null || (ConnectionTenants.TryGetValue(connection, out var allowed) && allowed.Contains(tenant));
+
     /// <summary>Placeholder prefix of the provider: <c>@</c> (default – SQL Server, SQLite, PostgreSQL/Npgsql, MySQL) or <c>:</c> (Oracle).</summary>
     public char ParameterPrefix { get; set; } = '@';
 
@@ -69,7 +93,11 @@ public sealed class SqlQueryProcessorOptions
     ConfigurationExample = """{ "query": "SELECT id, name FROM customers WHERE country = @country", "result": "Rows", "maxRows": 100 }""")]
 public sealed class SqlQueryProcessor(IOptions<SqlQueryProcessorOptions> options) : DynamicEndpointProcessor<SqlQueryConfig>
 {
-    protected override IEnumerable<string> Validate(SqlQueryConfig config)
+    protected override IEnumerable<string> Validate(SqlQueryConfig config) => Check(config, tenant: null);
+
+    protected override IEnumerable<string> Validate(SqlQueryConfig config, DynamicEndpointDefinition definition) => Check(config, definition.Tenant);
+
+    private IEnumerable<string> Check(SqlQueryConfig config, string? tenant)
     {
         if (string.IsNullOrWhiteSpace(config.Query))
         {
@@ -82,11 +110,18 @@ public sealed class SqlQueryProcessor(IOptions<SqlQueryProcessorOptions> options
             yield return error;
         }
 
-        if (!options.Value.Connections.ContainsKey(config.Connection ?? string.Empty))
+        // A tenant learns only about the connections it may use.
+        var settings = options.Value;
+        var connection = config.Connection ?? string.Empty;
+        var available = settings.Connections.Keys.Where(k => settings.IsAvailable(k, tenant)).Select(k => k.Length == 0 ? "(default)" : k).ToList();
+        if (!settings.Connections.ContainsKey(connection) || (tenant is not null && !settings.IsAvailable(connection, tenant)))
         {
-            yield return config.Connection is null
-                ? "No default connection is registered."
-                : $"Unknown connection '{config.Connection}'. Available: {string.Join(", ", options.Value.Connections.Keys.Select(k => k.Length == 0 ? "(default)" : k))}.";
+            var list = available.Count == 0 ? "none" : string.Join(", ", available);
+            yield return tenant is not null && settings.Connections.ContainsKey(connection)
+                ? $"Connection '{(connection.Length == 0 ? "(default)" : connection)}' isn't available to tenant '{tenant}'. Available: {list}."
+                : config.Connection is null
+                    ? "No default connection is registered."
+                    : $"Unknown connection '{config.Connection}'. Available: {list}.";
         }
     }
 
@@ -98,6 +133,12 @@ public sealed class SqlQueryProcessor(IOptions<SqlQueryProcessorOptions> options
         {
             // Saved before the checks existed or tightened – never run it.
             return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "The query of this endpoint is not allowed.");
+        }
+
+        if (!settings.IsAvailable(config.Connection ?? string.Empty, request.Endpoint.Tenant))
+        {
+            // The connection was taken away from the endpoint's tenant after it was saved.
+            return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "The connection of this endpoint is not allowed.");
         }
 
         var cancellationToken = request.RequestAborted;

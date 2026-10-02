@@ -231,6 +231,49 @@ public sealed class BuiltInProcessorTests
         }
     }
 
+    [Fact]
+    public async Task Sql_query_connections_are_available_to_the_tenants_they_are_assigned_to()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"de-sql-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using var host = await TestHost.StartAsync(configure: b => b
+                .UseMultiTenancy(t => t.FromHeader())
+                .AddSqlQueryProcessor(_ => new SqliteConnection($"Data Source={path};Pooling=False"), o =>
+                {
+                    o.Connections["acme-reports"] = _ => new SqliteConnection($"Data Source={path};Pooling=False");
+                    o.AllowTenants("acme-reports", "acme");
+                }));
+            DynamicEndpointDefinition Query(string? connection) =>
+                DynamicEndpoint.Get("/one").HandledBy("sql-query", new { query = "SELECT 1 AS one", result = "Value", connection });
+
+            var acme = host.Manager.ForTenant("acme");
+            var globex = host.Manager.ForTenant("globex");
+            Assert.True((await acme.ValidateAsync(Query("acme-reports"))).IsValid);
+            Assert.True((await host.Manager.ValidateAsync(Query(null))).IsValid);
+            Assert.True((await host.Manager.ValidateAsync(Query("acme-reports"))).IsValid);   // shared endpoints may use any connection
+
+            // Unassigned connections (the application's default one included) and other tenants' connections are off limits.
+            var defaultConnection = (await acme.ValidateAsync(Query(null))).Errors["processorConfig"];
+            Assert.Contains(defaultConnection, e => e.Contains("tenant 'acme'"));
+            var foreign = (await globex.ValidateAsync(Query("acme-reports"))).Errors["processorConfig"];
+            Assert.Contains(foreign, e => e.Contains("tenant 'globex'"));
+            Assert.DoesNotContain(foreign, e => e.Contains("Available: acme-reports"));
+
+            // Checked again before every run: a definition stored with a connection that was reassigned since never runs.
+            await acme.CreateAsync(Query("acme-reports"));
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/one") { Headers = { { "X-Tenant-Id", "acme" } } };
+            Assert.Equal("1", await (await host.Client.SendAsync(request)).Content.ReadAsStringAsync());
+            host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<DynamicEndpoints.Sql.SqlQueryProcessorOptions>>().Value.ConnectionTenants["acme-reports"].Clear();
+            using var again = new HttpRequestMessage(HttpMethod.Get, "/one") { Headers = { { "X-Tenant-Id", "acme" } } };
+            Assert.Equal(HttpStatusCode.InternalServerError, (await host.Client.SendAsync(again)).StatusCode);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static Task<TestHost> StartAsync(StubHandler upstream, Action<IDynamicEndpointsBuilder> configure) =>
         TestHost.StartAsync(configure: b =>
         {

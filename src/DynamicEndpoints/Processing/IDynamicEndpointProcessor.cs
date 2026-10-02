@@ -16,6 +16,12 @@ public interface IDynamicEndpointProcessor
 
     /// <summary>Validates <see cref="DynamicEndpointDefinition.ProcessorConfig"/> when a definition is saved.</summary>
     IEnumerable<string> ValidateConfiguration(JsonObject configuration) => [];
+
+    /// <summary>
+    /// Validates the configuration with the definition it belongs to, e.g. to allow some settings only for some tenants.
+    /// The library calls this overload; by default it calls <see cref="ValidateConfiguration(JsonObject)"/>.
+    /// </summary>
+    IEnumerable<string> ValidateConfiguration(JsonObject configuration, DynamicEndpointDefinition definition) => ValidateConfiguration(configuration);
 }
 
 /// <summary>
@@ -33,8 +39,14 @@ public abstract class DynamicEndpointProcessor<TConfiguration> : IDynamicEndpoin
     public IEnumerable<string> ValidateConfiguration(JsonObject configuration) =>
         TypedConfiguration.Validate<TConfiguration>(configuration, Validate);
 
+    public IEnumerable<string> ValidateConfiguration(JsonObject configuration, DynamicEndpointDefinition definition) =>
+        TypedConfiguration.Validate<TConfiguration>(configuration, c => Validate(c, definition));
+
     /// <summary>Additional, custom configuration checks.</summary>
     protected virtual IEnumerable<string> Validate(TConfiguration configuration) => [];
+
+    /// <summary>Checks that depend on the definition, e.g. its <see cref="DynamicEndpointDefinition.Tenant"/>. Calls <see cref="Validate(TConfiguration)"/> by default.</summary>
+    protected virtual IEnumerable<string> Validate(TConfiguration configuration, DynamicEndpointDefinition definition) => Validate(configuration);
 }
 
 internal static class TypedConfiguration

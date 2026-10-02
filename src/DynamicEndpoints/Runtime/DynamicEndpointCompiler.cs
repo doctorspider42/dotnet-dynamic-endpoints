@@ -459,7 +459,7 @@ internal sealed partial class DynamicEndpointCompiler(
             await using var scope = scopeFactory.CreateAsyncScope();
             var processor = scope.ServiceProvider.GetRequiredKeyedService<IDynamicEndpointProcessor>(descriptor.Name);
             var configuration = d.ProcessorConfig?.DeepClone() as JsonObject ?? new JsonObject();
-            foreach (var message in processor.ValidateConfiguration(configuration))
+            foreach (var message in processor.ValidateConfiguration(configuration, d))
             {
                 errors.Add("processorConfig", message);
             }
