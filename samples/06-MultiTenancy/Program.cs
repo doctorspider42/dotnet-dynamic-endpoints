@@ -22,8 +22,9 @@ builder.Services
         options.ReservedPrefixes.Add("/swagger");
         options.ReservedPrefixes.Add("/openapi");
         options.OpenApi.Title = "Multi-tenancy – dynamic endpoints";
-        // So Swagger UI and generated clients send the tenant.
-        options.OpenApi.AddHeader("X-Tenant", "The tenant: acme or globex.");
+        // So Swagger UI and generated clients send the tenant: required for the tenants' own endpoints. (Shared ef-crud
+        // endpoints on an entity with a tenant column get it from the library; other shared endpoints don't need it.)
+        options.OpenApi.AddHeader("X-Tenant", "The tenant: acme or globex.", required: true, appliesTo: d => d.Tenant is not null);
     })
     .AddFromAssemblyContaining<Program>()
     // 1. How a request finds its tenant. Others: FromHost(), FromClaim("tenant_id"), FromRoutePrefix("/t/{tenant}"), your own.

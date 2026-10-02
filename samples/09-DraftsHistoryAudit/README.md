@@ -47,7 +47,8 @@ curl "http://localhost:5109/prices/ANV-1?currency=PLN"      # price 15, currency
 
 curl http://localhost:5109/api/admin/endpoints/0199c0de-0000-7000-8000-000000000001/revisions    # Published, Updated, Created
 curl "http://localhost:5109/api/admin/endpoints/0199c0de-0000-7000-8000-000000000001/diff?from=1&to=2"
-# [{"path":"parameters[sku].maxLength","kind":"Changed","from":10,"to":20}, …]
+# [{"path":"processorConfig.body.price","kind":"Changed","from":10,"to":12},
+#  {"path":"parameters[sku].maxLength","kind":"Changed","from":10,"to":20}]
 
 curl -X POST -H "X-User: bob" http://localhost:5109/api/admin/endpoints/0199c0de-0000-7000-8000-000000000001/revisions/1/rollback
 curl http://localhost:5109/prices/ANV-1                     # price 10 again – revision 4, kind RolledBack, sourceRevision 1
