@@ -1,0 +1,74 @@
+# samples/06-MultiTenancy – start it with: dotnet run --project samples/06-MultiTenancy
+@baseUrl = http://localhost:5106
+
+### acme's endpoint
+GET {{baseUrl}}/welcome
+X-Tenant: acme
+
+### globex's endpoint on the same route
+GET {{baseUrl}}/welcome?name=Ann
+X-Tenant: globex
+
+### 404 – no tenant
+GET {{baseUrl}}/welcome
+
+### 404 – an endpoint of acme only
+GET {{baseUrl}}/promo
+X-Tenant: globex
+
+### Shared: everybody
+GET {{baseUrl}}/status
+
+### ef-crud with a tenant column: acme's rows
+GET {{baseUrl}}/products?sort=-price
+X-Tenant: acme
+
+### …globex creates one – stamped globex, "tenantId" in the body is ignored
+POST {{baseUrl}}/products
+X-Tenant: globex
+Content-Type: application/json
+
+{ "sku": "UMB-3", "name": "Umbrella", "price": 12, "stock": 5, "tenantId": "acme" }
+
+###
+GET {{baseUrl}}/products
+X-Tenant: globex
+
+### 404 – a request without a tenant never sees all rows
+GET {{baseUrl}}/products
+
+### Shared reference data
+GET {{baseUrl}}/countries
+X-Tenant: globex
+
+### sql-query on acme's connection
+GET {{baseUrl}}/reports/stock
+X-Tenant: acme
+
+### The tenant admin API: acme's endpoints only
+GET {{baseUrl}}/api/admin/tenants/acme/endpoints
+
+### Created through globex's admin API – belongs to globex
+POST {{baseUrl}}/api/admin/tenants/globex/endpoints
+Content-Type: application/json
+
+{ "method": "GET", "route": "/promo", "processor": "response", "processorConfig": { "body": { "code": "GLOBEX10" } } }
+
+###
+GET {{baseUrl}}/promo
+X-Tenant: globex
+
+### Rejected: acme may only use the acme-reports connection
+POST {{baseUrl}}/api/admin/tenants/acme/endpoints/validate
+Content-Type: application/json
+
+{ "method": "GET", "route": "/reports/everything", "processor": "sql-query", "processorConfig": { "query": "SELECT * FROM \"Products\"" } }
+
+### Tenants that own endpoints
+GET {{baseUrl}}/api/admin/endpoints/tenants
+
+### OpenAPI per tenant
+GET {{baseUrl}}/openapi/acme/dynamic.json
+
+###
+GET {{baseUrl}}/openapi/globex/dynamic.json

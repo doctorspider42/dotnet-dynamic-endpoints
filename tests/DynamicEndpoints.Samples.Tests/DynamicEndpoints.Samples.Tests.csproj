@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\samples\03-CustomProcessors\DynamicEndpoints.Samples.CustomProcessors.csproj" Aliases="CustomProcessors" />
     <ProjectReference Include="..\..\samples\04-BuiltInProcessors\DynamicEndpoints.Samples.BuiltInProcessors.csproj" Aliases="BuiltInProcessors" />
     <ProjectReference Include="..\..\samples\05-EfCrud\DynamicEndpoints.Samples.EfCrud.csproj" Aliases="EfCrud" />
+    <ProjectReference Include="..\..\samples\06-MultiTenancy\DynamicEndpoints.Samples.MultiTenancy.csproj" Aliases="MultiTenancy" />
   </ItemGroup>
 
 </Project>

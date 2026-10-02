@@ -5,6 +5,7 @@
     <Project Path="samples/03-CustomProcessors/DynamicEndpoints.Samples.CustomProcessors.csproj" />
     <Project Path="samples/04-BuiltInProcessors/DynamicEndpoints.Samples.BuiltInProcessors.csproj" />
     <Project Path="samples/05-EfCrud/DynamicEndpoints.Samples.EfCrud.csproj" />
+    <Project Path="samples/06-MultiTenancy/DynamicEndpoints.Samples.MultiTenancy.csproj" />
     <Project Path="samples/DynamicEndpoints.AppHost/DynamicEndpoints.AppHost.csproj" />
     <Project Path="samples/Showcase/DynamicEndpoints.Samples.Showcase.csproj" />
     <Project Path="samples/DynamicEndpoints.ServiceDefaults/DynamicEndpoints.ServiceDefaults.csproj" />
