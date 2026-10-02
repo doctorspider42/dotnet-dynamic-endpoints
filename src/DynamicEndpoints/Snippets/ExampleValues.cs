@@ -107,6 +107,35 @@ internal static class ExampleValues
             return allowed[0]?.DeepClone();
         }
 
+        // Compositions (OpenAPI response schemas): the parts of allOf merged, the first alternative of oneOf/anyOf.
+        if (s["allOf"] is JsonArray { Count: > 0 } parts)
+        {
+            var merged = s.ContainsKey("properties") ? FromSchema(new JsonObject { ["type"] = "object", ["properties"] = s["properties"]!.DeepClone() }, depth) as JsonObject : null;
+            merged ??= [];
+            foreach (var part in parts)
+            {
+                switch (FromSchema(part, depth + 1))
+                {
+                    case JsonObject obj:
+                        foreach (var (name, value) in obj)
+                        {
+                            merged[name] = value?.DeepClone();
+                        }
+
+                        break;
+                    case var other when parts.Count == 1:
+                        return other;
+                }
+            }
+
+            return merged;
+        }
+
+        if ((s["oneOf"] ?? s["anyOf"]) is JsonArray { Count: > 0 } alternatives)
+        {
+            return FromSchema(alternatives[0], depth + 1);
+        }
+
         switch (TypeOf(s))
         {
             case "object":

@@ -31,10 +31,34 @@ internal static partial class OpenApiConverter
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
     private static partial Regex ParameterName();
 
-    public sealed record Operation(string Method, string Path, string? OperationId, DynamicEndpointDefinition? Definition, List<string> Unmapped);
+    public const string ProcessorExtension = "x-dynamic-endpoints-processor";
+
+    public const string ProcessorConfigExtension = "x-dynamic-endpoints-processor-config";
+
+    /// <summary>Name of the built-in processor mock mode configures.</summary>
+    public const string MockProcessor = "response";
+
+    public sealed record Operation(
+        string Method,
+        string Path,
+        string? OperationId,
+        DynamicEndpointDefinition? Definition,
+        List<string> Unmapped,
+        OpenApiProcessorSource ProcessorSource = OpenApiProcessorSource.Default,
+        string? ProcessorReason = null);
+
+    /// <param name="Operations">The selected operations.</param>
+    /// <param name="Warnings">Document-level remarks.</param>
+    /// <param name="DocumentId">Identity of the document in <see cref="DynamicEndpointOrigin.Document"/>.</param>
+    /// <param name="OperationKeys">Origins (<see cref="DynamicEndpointOrigin.Operation"/>) of every operation in the document – selected or not.</param>
+    /// <param name="Tags">Tags of the document and its operations.</param>
+    public sealed record Conversion(List<Operation> Operations, List<string> Warnings, string? DocumentId, HashSet<string> OperationKeys, List<string> Tags);
+
+    /// <summary><see cref="DynamicEndpointOrigin.Operation"/> of an operation: its operationId, or method and path.</summary>
+    public static string OperationKey(string method, string path, string? operationId) => operationId ?? $"{method} {path}";
 
     /// <exception cref="FormatException">Not an OpenAPI 3.x document.</exception>
-    public static (List<Operation> Operations, List<string> Warnings) Convert(JsonNode? document, OpenApiImportOptions options)
+    public static Conversion Convert(JsonNode? document, OpenApiImportOptions options)
     {
         if (document is not JsonObject root)
         {
@@ -56,11 +80,15 @@ internal static partial class OpenApiConverter
         var operations = new List<Operation>();
         var resolver = new Resolver(root);
         var documentSecurity = root["security"] as JsonArray;
+        var documentId = Clean(options.DocumentId) ?? Text(root["info"]?["title"])?.Trim();
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        var tags = (root["tags"] as JsonArray ?? []).Select(t => Text(t?["name"])).OfType<string>().ToList();
+        var documentProcessor = Extension(root, "the document", warnings);
 
         if (root["paths"] is not JsonObject paths)
         {
             warnings.Add("The document has no paths.");
-            return (operations, warnings);
+            return new Conversion(operations, warnings, documentId, keys, tags);
         }
 
         foreach (var (path, pathNode) in paths)
@@ -71,6 +99,7 @@ internal static partial class OpenApiConverter
                 continue;
             }
 
+            var pathProcessor = Extension(pathItem, $"path '{path}'", notes);
             foreach (var method in Methods)
             {
                 if (pathItem[method] is not JsonObject operation)
@@ -80,7 +109,10 @@ internal static partial class OpenApiConverter
 
                 var upper = method.ToUpperInvariant();
                 var operationId = Text(operation["operationId"]);
-                if (options.Tags is { Count: > 0 } tags && !Strings(operation["tags"]).Any(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+                var operationTags = Strings(operation["tags"]).ToList();
+                keys.Add(OperationKey(upper, path, operationId));
+                tags.AddRange(operationTags);
+                if (options.Tags is { Count: > 0 } only && !operationTags.Any(t => only.Contains(t, StringComparer.OrdinalIgnoreCase)))
                 {
                     continue;
                 }
@@ -93,12 +125,177 @@ internal static partial class OpenApiConverter
 
                 var unmapped = new List<string>(notes);
                 var definition = ConvertOperation(upper, path, operation, pathItem, documentSecurity, resolver, options, unmapped);
-                operations.Add(new Operation(upper, path, operationId, definition, unmapped.Distinct().ToList()));
+                var choice = ChooseProcessor(operation, operationTags, pathProcessor, documentProcessor, options, resolver, unmapped);
+                definition = definition with
+                {
+                    Processor = choice.Processor,
+                    ProcessorConfig = choice.Config,
+                    Origin = new DynamicEndpointOrigin { Kind = DynamicEndpointOrigin.OpenApi, Document = documentId, Operation = OperationKey(upper, path, operationId) },
+                };
+                operations.Add(new Operation(upper, path, operationId, definition, unmapped.Distinct().ToList(), choice.Source, choice.Reason));
             }
         }
 
-        return (operations, warnings);
+        return new Conversion(operations, warnings, documentId, keys, tags.Distinct(StringComparer.Ordinal).ToList());
     }
+
+    private sealed record ProcessorChoice(string? Processor, JsonObject? Config, OpenApiProcessorSource Source, string? Reason);
+
+    /// <summary>
+    /// Operation extension &gt; path extension &gt; tag mapping &gt; document extension &gt; <c>Processor</c> option &gt; default. In mock
+    /// mode the import options (tag mapping, <c>Processor</c>, default) give way to the <c>response</c> processor; extensions still win.
+    /// </summary>
+    private static ProcessorChoice ChooseProcessor(
+        JsonObject operation,
+        List<string> operationTags,
+        ProcessorChoice? pathProcessor,
+        ProcessorChoice? documentProcessor,
+        OpenApiImportOptions options,
+        Resolver resolver,
+        List<string> unmapped)
+    {
+        if (Extension(operation, "the operation", unmapped) is { } own)
+        {
+            return own;
+        }
+
+        if (pathProcessor is not null)
+        {
+            return pathProcessor;
+        }
+
+        if (!options.Mock && options.ProcessorsByTag is { Count: > 0 } byTag)
+        {
+            foreach (var tag in operationTags)
+            {
+                var mapping = byTag.FirstOrDefault(m => string.Equals(m.Key, tag, StringComparison.OrdinalIgnoreCase));
+                if (mapping.Value is { } map && Clean(map.Processor) is { } processor)
+                {
+                    return new ProcessorChoice(processor, map.ProcessorConfig?.DeepClone() as JsonObject, OpenApiProcessorSource.Tag, $"tag '{mapping.Key}'");
+                }
+            }
+        }
+
+        if (documentProcessor is not null)
+        {
+            return documentProcessor;
+        }
+
+        if (options.Mock)
+        {
+            var (config, reason) = MockConfig(operation, resolver, unmapped);
+            return new ProcessorChoice(MockProcessor, config, OpenApiProcessorSource.Mock, reason);
+        }
+
+        return Clean(options.Processor) is { } option
+            ? new ProcessorChoice(option, options.ProcessorConfig?.DeepClone() as JsonObject, OpenApiProcessorSource.Option, "the processor option")
+            : new ProcessorChoice(null, null, OpenApiProcessorSource.Default, "DefaultProcessor");
+    }
+
+    /// <summary>The processor named by <c>x-dynamic-endpoints-processor</c> (and its <c>-config</c>) on an operation, path item or document.</summary>
+    private static ProcessorChoice? Extension(JsonObject owner, string where, List<string> notes)
+    {
+        var name = owner[ProcessorExtension];
+        var config = owner[ProcessorConfigExtension];
+        if (name is null)
+        {
+            if (config is not null)
+            {
+                notes.Add($"'{ProcessorConfigExtension}' of {where} without '{ProcessorExtension}' – ignored.");
+            }
+
+            return null;
+        }
+
+        if (Text(name)?.Trim() is not { Length: > 0 } processor)
+        {
+            notes.Add($"'{ProcessorExtension}' of {where} is not a processor name – ignored.");
+            return null;
+        }
+
+        if (config is not null and not JsonObject)
+        {
+            notes.Add($"'{ProcessorConfigExtension}' of {where} is not an object – ignored.");
+        }
+
+        var source = where switch
+        {
+            "the operation" => OpenApiProcessorSource.OperationExtension,
+            "the document" => OpenApiProcessorSource.DocumentExtension,
+            _ => OpenApiProcessorSource.PathExtension,
+        };
+        return new ProcessorChoice(processor, (config as JsonObject)?.DeepClone() as JsonObject, source, $"{ProcessorExtension} of {where}");
+    }
+
+    /// <summary>
+    /// Configuration of the <c>response</c> processor answering like the operation's first 2xx response: its status code, content
+    /// type and example – or one generated from its schema.
+    /// </summary>
+    private static (JsonObject Config, string Reason) MockConfig(JsonObject operation, Resolver resolver, List<string> unmapped)
+    {
+        var responses = operation["responses"] as JsonObject ?? [];
+        var documented = responses
+            .Where(r => r.Key.Length == 3 && r.Key[0] is >= '1' and <= '5' && (int.TryParse(r.Key, out _) || r.Key[1..].Equals("XX", StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(r => r.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var chosen = documented.FirstOrDefault(r => r.Key[0] == '2');
+        if (chosen.Key is null && documented.Count > 0)
+        {
+            chosen = documented[0];
+            unmapped.Add($"mock: no 2xx response – it answers with the documented {chosen.Key}.");
+        }
+
+        if (chosen.Key is null)
+        {
+            unmapped.Add("mock: no documented status code – it answers 204 No Content.");
+            return (new JsonObject { ["statusCode"] = 204 }, "mock: 204, no response documented");
+        }
+
+        var status = int.TryParse(chosen.Key, out var code) ? code : (chosen.Key[0] - '0') * 100;    // "2XX" answers 200
+        var config = new JsonObject { ["statusCode"] = status };
+        if (resolver.Resolve(chosen.Value, unmapped) is not JsonObject response || response["content"] is not JsonObject { Count: > 0 } content)
+        {
+            return (config, $"mock: {status} without a body");
+        }
+
+        var (mediaType, media) = content
+            .Select(c => (Type: c.Key.Split(';')[0].Trim().ToLowerInvariant(), Media: c.Value as JsonObject))
+            .OrderBy(c => IsJson(c.Type) ? 0 : c.Type.StartsWith("text/", StringComparison.Ordinal) ? 1 : 2)
+            .First();
+        var example = media?["example"]?.DeepClone()
+            ?? (media?["examples"] as JsonObject)?.Select(e => resolver.Resolve(e.Value, unmapped)?["value"]).FirstOrDefault(v => v is not null)?.DeepClone();
+        var generated = example is null;
+        var json = IsJson(mediaType);
+        if (generated && media?["schema"] is { } schemaNode && (json || mediaType.StartsWith("text/", StringComparison.Ordinal)))
+        {
+            example = ExampleValues.FromSchema(resolver.Inline(schemaNode, unmapped), 0);
+        }
+
+        if (json && example is not null)
+        {
+            config["body"] = example;
+            if (mediaType != "application/json")
+            {
+                config["contentType"] = mediaType;
+            }
+        }
+        else if (mediaType.StartsWith("text/", StringComparison.Ordinal) && example is not null)
+        {
+            config["text"] = example is JsonValue v && v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : example.ToJsonString();
+            config["contentType"] = mediaType == "text/plain" ? "text/plain; charset=utf-8" : mediaType;
+        }
+        else
+        {
+            unmapped.Add($"mock: no example of the '{mediaType}' response – it answers {status} without a body.");
+            return (config, $"mock: {status} without a body");
+        }
+
+        return (config, $"mock: {status} with {(generated ? "a body generated from the schema" : "the documented example")}");
+    }
+
+    private static bool IsJson(string mediaType) => mediaType is "application/json" || mediaType.EndsWith("+json", StringComparison.Ordinal);
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static DynamicEndpointDefinition ConvertOperation(
         string method,
@@ -241,8 +438,6 @@ internal static partial class OpenApiConverter
             Name = Text(operation["summary"]) ?? Text(operation["operationId"]),
             Description = Text(operation["description"]),
             Group = options.Group ?? Strings(operation["tags"]).FirstOrDefault(),
-            Processor = options.Processor,
-            ProcessorConfig = options.ProcessorConfig?.DeepClone() as JsonObject,
             Parameters = parameters,
             ResponseSchema = responseSchema,
             ResponseExample = responseExample,
