@@ -64,6 +64,37 @@ app.MapDynamicEndpointsTenantAdmin("/api/tenants/{tenant}/endpoints")
 The tenant comes from the route parameter of the prefix, or from the resolvers when the prefix has none (e.g. `/api/my/endpoints`
 with `FromClaim()`).
 
+## Drafts, history, export and import per tenant
+
+Everything on top of the manager follows the tenant's view, so a tenant admin can work with drafts, history and GitOps without
+seeing anybody else's endpoints:
+
+| Feature | `manager.ForTenant("acme")` and the tenant's admin API |
+|---|---|
+| [Drafts](drafts-and-history.md) | lists and gets only the tenant's drafts; saved drafts belong to the tenant; another tenant's endpoint can't be drafted over (its id "already exists") |
+| History, diffs, rollback | only for the tenant's endpoints (`404` otherwise); a revision that belonged to another tenant can't be rolled back to |
+| Scheduled publishing | `PublishDueAsync()` of a tenant view publishes only that tenant's due drafts; the built-in scheduler publishes every tenant's |
+| [Export & import](export-import-gitops.md) | exports, matches and syncs only the tenant's endpoints: `?mode=sync` deletes the tenant's endpoints that aren't in the file, nobody else's; imported endpoints belong to the tenant |
+| [OpenAPI import](openapi-import.md) | skeletons belong to the tenant; "route already exists" means the tenant already has it |
+| [Audit log](audit-log.md) | only the tenant's entries |
+| Change sets | `ForTenant("acme").BeginChanges(…)` assigns the tenant to definitions and drafts |
+
+```bash
+dynamic-endpoints diff acme.yaml --url https://api.example.com/api/tenants/acme/endpoints
+dynamic-endpoints push acme.yaml --sync --url https://api.example.com/api/tenants/acme/endpoints   # acme only
+```
+
+- **Ids are global.** Copying a tenant's export into another tenant keeps the ids, which already exist, so those endpoints are
+  reported invalid. Remove the `id`s to copy endpoints between tenants: they are then matched by method and route.
+- **Shared endpoints** are invisible to a tenant view. A tenant import or draft on a route a shared endpoint uses fails the
+  conflict check.
+- The tenant admin API needs the built-in transfer and OpenAPI importer: if you replaced `IDynamicEndpointTransfer` or
+  `IDynamicEndpointOpenApiImporter`, their routes fail rather than leak other tenants' endpoints.
+- The [admin panel](admin-ui.md#with-multi-tenancy) can sit on top of a tenant admin API whose tenant comes from the resolvers.
+- **Caching and rate limits:** with `FromHeader()`, add the tenant header to `varyByHeader` of output-cached endpoints; rate
+  limits count per endpoint, so each tenant endpoint has its own budget
+  ([caching & rate limits](caching-and-rate-limits.md#with-multi-tenancy)).
+
 ## OpenAPI
 
 Endpoints of different tenants can share a path, so there is one document per tenant:

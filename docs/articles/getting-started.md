@@ -4,6 +4,7 @@
 dotnet add package DynamicEndpoints
 dotnet add package DynamicEndpoints.EntityFrameworkCore   # persistence
 dotnet add package DynamicEndpoints.FluentValidation      # optional
+dotnet add package DynamicEndpoints.AdminUI               # optional: the admin panel
 ```
 
 ```csharp
@@ -21,13 +22,16 @@ var app = builder.Build();
 app.MapDynamicEndpoints();                                         // 🔥 the dynamic routes
 app.MapDynamicEndpointsAdmin("/api/admin/endpoints")               // 🖥️ management API
    .RequireAuthorization("admin");
+app.MapDynamicEndpointsAdminUI("/admin", "/api/admin/endpoints")   // 🎛️ admin panel (DynamicEndpoints.AdminUI)
+   .RequireAuthorization("admin");
 app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");           // 📜 OpenAPI 3.1
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/openapi/dynamic.json", "Dynamic API"));
 
 app.Run();
 ```
 
-Add the table to your context with `modelBuilder.ApplyDynamicEndpointsConfiguration();` and you're done.
+Add the tables to your context with `modelBuilder.ApplyDynamicEndpointsConfiguration();` and you're done. Open `/admin/` for the
+[admin panel](admin-ui.md).
 
 #### Your first endpoint, from code
 
@@ -73,3 +77,10 @@ public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderCon
     }
 }
 ```
+
+#### Where to go next
+
+- [Admin panel](admin-ui.md) and [drafts, history & rollback](drafts-and-history.md): let admins change endpoints safely.
+- [Built-in processors](built-in-processors.md): forward, webhook, response templates and SQL without writing a processor.
+- [Export, import & GitOps](export-import-gitops.md) and [import from OpenAPI](openapi-import.md): definitions in Git, pushed from CI.
+- [Caching & rate limits](caching-and-rate-limits.md), [metrics & tracing](telemetry.md), [multiple instances](multiple-instances.md).

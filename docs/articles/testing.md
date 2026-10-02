@@ -12,5 +12,9 @@ await using var server = await DynamicEndpointsTestServer.StartAsync(b => b.AddP
 await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<OrderLookupProcessor>().FromRoute("id"));
 ```
 
+`WithInMemoryDynamicEndpoints` swaps the store for an in-memory one, with history and drafts. It also removes store initializers
+(migrations), change notifiers, polling and scheduled publishing: call `manager.PublishDueAsync()` to publish due drafts. Your
+seeders still run, against the in-memory store.
+
 `services.UseInMemoryDynamicEndpoints()` does the same in your own `ConfigureTestServices`. To test several instances, share one
 `InMemoryDynamicEndpointStore` and one `InMemoryDynamicEndpointChangeNotifier` between servers.

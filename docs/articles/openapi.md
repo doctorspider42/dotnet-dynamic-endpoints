@@ -21,4 +21,8 @@ DynamicEndpoint.Post("/orders")
 
 - **Headers** are real header parameters of each operation, so client generators produce arguments for them.
 - **Security requirements** are attached to each operation. Endpoints with `AllowAnonymous` get none.
-- **Examples:** parameter examples show up on query, header and route parameters and in the request body example.
+- **Examples:** parameter examples show up on query, header and route parameters and in the request body example. The same
+  examples feed the [request snippets](admin-api.md#snippets) and the admin panel's *Try* console.
+- **Caching and rate limits** of a definition are documented too: `Cache-Control` and `ETag` response headers, `If-None-Match`
+  and `304`, the limit and the `429` ([caching & rate limits](caching-and-rate-limits.md)).
+- **The other way round:** [Import from OpenAPI](openapi-import.md) turns an OpenAPI 3.x document into endpoint skeletons.

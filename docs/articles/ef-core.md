@@ -11,7 +11,12 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 dotnet ef migrations add AddDynamicEndpoints
 ```
 
-**The bundled `DynamicEndpointsDbContext`** ships its own provider-independent migrations:
+`ApplyDynamicEndpointsConfiguration()` maps three tables: `DynamicEndpoints`, plus `DynamicEndpointRevisions` and
+`DynamicEndpointDrafts` for [history and drafts](drafts-and-history.md). Upgrading from 0.3, add a migration for the two new ones,
+or pass `history: false` to keep the old model (and no history and drafts). A revision is saved in the same `SaveChanges` as the
+definition it belongs to, and a publish removes its draft in it too.
+
+**The bundled `DynamicEndpointsDbContext`** ships its own provider-independent migrations, the history and draft tables included:
 
 ```csharp
 builder.Services.AddDynamicEndpoints()
@@ -19,6 +24,7 @@ builder.Services.AddDynamicEndpoints()
 // or apply them in your deployment step: await db.Database.MigrateAsync();
 ```
 
-A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`. With your own
+A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`.
+Definitions that existed before the history tables start their history with their published revision. With your own
 context, add the table to an empty initial migration the usual EF Core way. `MigrateOnStartup<TContext>()` applies your own
 context's migrations on start-up, and any `IDynamicEndpointStoreInitializer` runs before definitions are loaded.

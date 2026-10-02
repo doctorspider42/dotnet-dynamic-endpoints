@@ -15,4 +15,8 @@ await manager.ReloadAsync();                                           // re-rea
 `UpsertAsync` is made for syncing definitions from your own model: it creates the endpoint, or replaces the stored one with the same
 `Id` whatever its revision. Nothing is written (and the revision stays) when the content didn't change.
 
+Drafts, history and rollback are on the manager too (`SaveDraftAsync`, `PublishAsync`, `GetHistoryAsync`, `DiffAsync`,
+`RollbackAsync`, …), see [Drafts, history & rollback](drafts-and-history.md). Bulk export and import go through
+`IDynamicEndpointTransfer` ([GitOps](export-import-gitops.md)).
+
 The sample's `Greetings/` folder shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.

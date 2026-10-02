@@ -5,4 +5,17 @@
 - 📏 **Limits:** JSON body size (1 MB), form body size (30 MB) and JSON depth (32) by default. Bodies that aren't valid UTF-8 are rejected.
 - 🧱 **Reserved prefixes:** the admin API is protected automatically, the rest via options. Clashes with the app's own endpoints are rejected.
 - 🔑 **Policies:** authorization policies referenced by definitions must exist when the definition is saved.
-- ⚠️ **The admin API is open by default.** Put `.RequireAuthorization(...)` on it.
+- 🌐 **Outbound calls:** the built-in `http-forward` and `webhook` processors call whatever admins configure. Restrict the targets
+  with `AllowedHosts` (checked on save and on every call) when admins aren't fully trusted. Placeholders can't change scheme, host
+  or port, and every value is URL-encoded. Secrets stay in the configuration (`{config:Section:Key}`, `signingSecretConfigurationKey`).
+  See [Built-in processors](built-in-processors.md).
+- 🗄️ **SQL:** the `sql-query` processor binds parameters only and rejects anything but a single read-only statement, but it is a
+  safety net, not a sandbox. Give it a database user that can read exactly what the endpoints may expose.
+- 📥 **Imports** (export/import, OpenAPI) are validated as a whole like any definition, and nothing is written when one is
+  invalid. Imported OpenAPI skeletons are disabled until somebody reviewed them.
+- 🖥️ **Admin panel:** holds no data, sets `X-Content-Type-Options: nosniff`, `frame-ancestors 'none'` and
+  `Referrer-Policy: no-referrer`. Secure the admin API it talks to, not only the panel.
+- 🏢 **Tenants:** a tenant's admin API only sees and changes the tenant's endpoints, drafts and history; secure it with a policy
+  that checks the user belongs to the tenant ([multi-tenancy](multi-tenancy.md#admin-api)).
+- ⚠️ **The admin API is open by default.** Put `.RequireAuthorization(...)` on it. The same goes for `MapDynamicEndpointsAdminUI()`
+  and `MapDynamicEndpointsTenantAdmin()`.
