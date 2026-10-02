@@ -1,0 +1,66 @@
+# samples/07-OpenApiImport – start it with: dotnet run --project samples/07-OpenApiImport
+@baseUrl = http://localhost:5107
+
+### Mock: the documented example of listPets
+GET {{baseUrl}}/pets
+
+### Mock: the example with {{petId}} rendered
+GET {{baseUrl}}/pets/7
+
+### Mock: 201 with the example, {{name}} and {{species}} from the request
+POST {{baseUrl}}/pets
+Content-Type: application/json
+
+{ "name": "Polly", "species": "bird" }
+
+### 400 – species is an enum in the document
+POST {{baseUrl}}/pets
+Content-Type: application/json
+
+{ "name": "Nemo", "species": "fish" }
+
+### x-dynamic-endpoints-processor: the "inventory" processor, even in mock mode
+GET {{baseUrl}}/store/inventory
+
+###
+POST {{baseUrl}}/store/orders
+Content-Type: application/json
+
+{ "petId": 1, "quantity": 2 }
+
+### Re-import version 2 with sync – dry run: update, create, delete, unchanged
+POST {{baseUrl}}/api/admin/endpoints/import/openapi?mock=true&mode=sync&enabled=true&dryRun=true
+Content-Type: application/json
+
+< ./petstore-v2.json
+
+### …for real
+POST {{baseUrl}}/api/admin/endpoints/import/openapi?mock=true&mode=sync&enabled=true
+Content-Type: application/json
+
+< ./petstore-v2.json
+
+### New in version 2
+GET {{baseUrl}}/pets/1/photos
+
+### A processor per tag (not a mock), under a route prefix – dry run
+POST {{baseUrl}}/api/admin/endpoints/import/openapi?processor=echo&processorByTag=store:echo&routePrefix=/v1&dryRun=true
+Content-Type: application/json
+
+< ./petstore.json
+
+### Options in the body: { document, options } – configurations don't fit in a query string
+POST {{baseUrl}}/api/admin/endpoints/import/openapi?dryRun=true
+Content-Type: application/json
+
+{
+  "document": { "openapi": "3.0.3", "info": { "title": "Tiny", "version": "1" },
+                "paths": { "/ping": { "get": { "operationId": "ping", "tags": ["health"], "responses": { "200": { "description": "pong" } } } } } },
+  "options": {
+    "routePrefix": "/tiny",
+    "processorsByTag": { "health": { "processor": "response", "processorConfig": { "body": { "pong": true } } } }
+  }
+}
+
+### The imported endpoints – each records its origin
+GET {{baseUrl}}/api/admin/endpoints
