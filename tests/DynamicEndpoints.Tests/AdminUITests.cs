@@ -42,7 +42,8 @@ public sealed class AdminUITests
         Assert.Equal("text/javascript", script.Content.Headers.ContentType!.MediaType);
         var code = await script.Content.ReadAsStringAsync();
         foreach (var feature in new[] { "function openHistory", "function openImport", "function openOpenApiImport", "function openExport",
-                     "function openAuditLog", "function renderCachingSection", "function renderRateLimitSection", "api('/info')" })
+                     "function openAuditLog", "function renderCachingSection", "function renderRateLimitSection", "api('/info')",
+                     "function openCrudScaffold", "PROCESSOR_FORMS['ef-crud']" })
         {
             Assert.Contains(feature, code);
         }

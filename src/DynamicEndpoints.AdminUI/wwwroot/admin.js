@@ -27,7 +27,8 @@ let draftErrors = {};   // validation errors keyed by path
 let editing = null;     // { state, fromDraft } of the endpoint being edited
 let snippetKind = 'curl';
 // What the server supports (GET /info; probed on older servers). tenancy: null or { routePrefix, routeParameter, header }.
-let features = { tenancy: null, tenant: null, audit: false, formats: ['json'] };
+// crud: the ef-crud processor of DynamicEndpoints.EntityFrameworkCore ("crud" in /info features).
+let features = { tenancy: null, tenant: null, audit: false, formats: ['json'], crud: false };
 let tenants = [];
 let tenantFilter = '';  // '' all, '*' shared only, or a tenant
 let selected = new Set();
@@ -126,7 +127,9 @@ async function detect() {
     features = {
       tenancy: r.data.tenancy ?? null, tenant: r.data.tenant ?? null, audit: !!r.data.auditLog,
       formats: r.data.formats?.length ? r.data.formats.map(f => f.toLowerCase()) : ['json'],
+      crud: (r.data.features || []).some(f => String(f).toLowerCase() === 'crud'),
     };
+    if (features.crud) await loadCrudEntities();
     return;
   }
   // An older server without /info: the audit log answers or it doesn't; tenancy shows once an endpoint has a tenant.
@@ -168,7 +171,8 @@ function renderTools() {
     ${features.audit ? '<button onclick="openAuditLog()" title="Who changed what, and when">Audit log</button>' : ''}
     <button onclick="openExport()" title="Download definitions as JSON${features.formats.includes('yaml') ? ' or YAML' : ''}">⇩ Export</button>
     <button onclick="openImport()" title="Import exported definitions">⇧ Import</button>
-    <button onclick="openOpenApiImport()" title="Create endpoint skeletons from an OpenAPI document" class="hide-sm">OpenAPI import</button>`;
+    <button onclick="openOpenApiImport()" title="Create endpoint skeletons from an OpenAPI document" class="hide-sm">OpenAPI import</button>
+    ${features.crud ? '<button onclick="openCrudScaffold()" title="Generate CRUD endpoints for an entity of the EF Core model" class="hide-sm">Scaffold CRUD</button>' : ''}`;
 }
 
 function setTenantFilter(value) {
@@ -502,6 +506,7 @@ const PROCESSOR_FORMS = {
     { key: 'maxRows', label: 'Max rows', type: 'int', placeholder: '100' },
     { key: 'timeoutSeconds', label: 'Timeout (s)', type: 'int', placeholder: '30' },
   ],
+  // 'ef-crud' is added in the ef-crud section below.
 };
 const formOf = (processor) => PROCESSOR_FORMS[(processor || '').toLowerCase()];
 
@@ -538,6 +543,7 @@ function renderProcessorSection(proc) {
 }
 
 function configField(f, errors) {
+  if (f.html) return f.html(errors);
   const value = (draft.processorConfig ?? {})[f.key];
   const path = `processorConfig.${f.key}`;
   const placeholder = f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : '';
@@ -551,7 +557,7 @@ function configField(f, errors) {
     case 'list': html = input(path, (value || []).join(', '), `data-list="1" data-optional="1"${placeholder}`); break;
     case 'headers': html = `<textarea ${withClass(path, `rows="2" data-headers="1" data-optional="1" spellcheck="false" class="mono" placeholder="X-Api-Key: {config:Backend:ApiKey}"`)}>${esc(Object.entries(value || {}).map(([k, v]) => `${k}: ${v}`).join('\n'))}</textarea>`; break;
     default: html = f.options
-      ? select(path, value ?? '', f.options, 'data-optional="1"')
+      ? select(path, value ?? '', typeof f.options === 'function' ? f.options() : f.options, `data-optional="1"${f.rerender ? ' data-rerender="1"' : ''}`)
       : input(path, value, `data-optional="1"${placeholder}${mono}`);
   }
   if (errors?.length) html = html.replace('class="', 'class="invalid ');
@@ -1328,6 +1334,148 @@ function renderOpenApiResult(r, dryRun) {
 }
 
 function toggleOpenApiDefinition(i) { const row = document.getElementById(`oa-def-${i}`); row.hidden = !row.hidden; }
+
+// ---------- ef-crud (DynamicEndpoints.EntityFrameworkCore) ----------
+// The entities the developer exposed (GET /crud/entities): the form of the ef-crud processor and the "Scaffold CRUD" wizard.
+const CRUD_OPERATIONS = ['list', 'get', 'create', 'update', 'patch', 'delete'];
+const CRUD_METHODS = { list: 'GET', get: 'GET', create: 'POST', update: 'PUT', patch: 'PATCH', delete: 'DELETE' };
+let crudEntities = [];
+let crudPlan = null;    // the last successful scaffold dry run
+
+async function loadCrudEntities() {
+  const r = await api('/crud/entities');
+  crudEntities = r.ok && Array.isArray(r.data) ? r.data : [];
+}
+
+const crudEntityOf = (name) => crudEntities.find(e => e.name.toLowerCase() === String(name || '').toLowerCase());
+const crudDraftEntity = () => crudEntityOf((draft?.processorConfig ?? {}).entity);
+
+PROCESSOR_FORMS['ef-crud'] = [
+  { key: 'entity', label: 'Entity', rerender: true, options: () => [['', '— choose —'], ...crudEntities.map(e => e.name)] },
+  { key: 'operation', label: 'Operation', rerender: true,
+    options: () => [['', 'list (default)'], ...(crudDraftEntity()?.operations ?? CRUD_OPERATIONS).filter(o => o !== 'list').map(o => [o, `${o} (${CRUD_METHODS[o]})`])] },
+  { key: 'key', label: 'Key route parameter <span class="muted">(get, update, patch, delete)</span>', mono: true, placeholder: 'the key field' },
+  { key: 'pageSize', label: 'Page size <span class="muted">(list)</span>', type: 'int', placeholder: '50' },
+  { key: 'maxPageSize', label: 'Max page size <span class="muted">(list)</span>', type: 'int', placeholder: '200' },
+  { key: 'sort', label: 'Default order <span class="muted">(list; name,-price)</span>', mono: true },
+  { key: 'sortParameter', label: 'Sort parameter <span class="muted">(list; a query parameter, e.g. sort)</span>', mono: true },
+  { key: 'requireIfMatch', label: 'Require If-Match (428 without the ETag)', type: 'bool' },
+  { key: 'filters', label: 'Filters <span class="muted">(list; JSON array)</span>', type: 'json', cls: 'wide', placeholder: '[{ "field": "price", "operator": "gte", "parameter": "minPrice" }]' },
+  { key: '_fields', html: () => crudFieldsInfo() },
+];
+
+// What the chosen entity exposes – the fields admins can map parameters, filters and sorting to.
+function crudFieldsInfo() {
+  const entity = crudDraftEntity();
+  if (!entity) {
+    return `<p class="hint wide" style="margin:0">${crudEntities.length ? 'Choose an entity to see its fields.' : 'No entities are exposed to this admin API.'}</p>`;
+  }
+  const op = (draft.processorConfig ?? {}).operation || 'list';
+  const writes = ['create', 'update', 'patch'].includes(op);
+  return `<div class="wide"><table><thead><tr><th>Field</th><th>Type</th><th>Write</th><th>Filter</th><th>Sort</th></tr></thead><tbody>
+    ${entity.fields.map(f => `<tr><td><code>${esc(f.name)}</code>${f.key ? ' <span class="pill">key</span>' : ''}${f.required ? ' <span class="muted">required</span>' : ''}</td>
+      <td class="muted">${esc([].concat(f.schema.type).join(' | '))}${f.schema.format ? ` · ${esc(f.schema.format)}` : ''}${f.schema.maxLength ? ` · ≤ ${f.schema.maxLength}` : ''}${f.schema.enum ? ` · ${esc(f.schema.enum.filter(v => v !== null).join(', '))}` : ''}</td>
+      <td>${!f.readOnly ? '✓' : f.creatable ? '<span class="muted">create</span>' : '<span class="muted">read-only</span>'}</td>
+      <td class="muted">${f.filterable ? esc(f.operators.join(' ')) : ''}</td><td>${f.sortable ? '✓' : ''}</td></tr>`).join('')}
+    </tbody></table>
+    <p class="hint" style="margin:6px 0 0">${writes ? 'Body parameters named like writable fields are written; nothing else is.' : op === 'list'
+      ? 'Rows come back as <code>{ items, page, pageSize, total }</code>; declare <code>page</code>/<code>pageSize</code> query parameters to let clients page.'
+      : `The key comes from the route parameter <code>{${esc(entity.key || 'id')}}</code>.`}
+      ${entity.tenantColumn ? ' Rows are filtered by tenant.' : ''}${entity.concurrencyToken ? ' Responses carry an <code>ETag</code>; updates and deletes check <code>If-Match</code>.' : ''}
+      <a href="#" onclick="openCrudScaffold('${esc(entity.name)}');return false">Scaffold all endpoints of ${esc(entity.name)}</a> instead.</p></div>`;
+}
+
+function openCrudScaffold(entity) {
+  crudPlan = null;
+  openDrawer('Scaffold CRUD endpoints');
+  const first = crudEntityOf(entity) ?? crudEntities[0];
+  $('#drawer-body').innerHTML = `
+    <section class="card"><h3>1 · Entity</h3>
+      <form class="grid" id="crud-options" onsubmit="return false">
+        <label class="field">Entity<select name="entity">${crudEntities.map(e => `<option ${e === first ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select></label>
+        <label class="field">Route prefix<input name="routePrefix" class="mono" placeholder="/${esc(first?.name ?? 'items')}"></label>
+        <label class="field">Group<input name="group" placeholder="${esc(first?.name ?? '')}"></label>
+        <div class="field wide">Operations<div id="crud-operations"></div></div>
+        <label class="check"><input type="checkbox" name="enabled"> Enable right away</label>
+      </form>
+      <p class="hint">Generates one endpoint per operation from the entity's EF Core model: the key in the route, parameters with types,
+        required fields, max lengths, precision and enum values, paging, sorting and filters. Only the fields the application exposed
+        are used. Existing routes are skipped; new endpoints are disabled unless enabled here.${features.tenant ? ` They belong to tenant <b>${esc(features.tenant)}</b>.` : ''}</p>
+    </section>
+    <div id="crud-result"></div>`;
+  const form = $('#crud-options');
+  form.entity.onchange = () => { renderCrudOperations(); const e = crudEntityOf(form.entity.value); form.routePrefix.placeholder = `/${e.name}`; form.group.placeholder = e.name; invalidateCrud(); };
+  form.addEventListener('change', invalidateCrud);
+  renderCrudOperations();
+  renderCrudFoot();
+}
+
+function renderCrudOperations() {
+  const entity = crudEntityOf($('#crud-options').entity.value);
+  $('#crud-operations').innerHTML = (entity?.operations ?? []).map(o =>
+    `<label class="check" style="display:inline-flex;margin-right:12px"><input type="checkbox" name="operation" value="${o}" checked> ${o} <span class="muted">&nbsp;${CRUD_METHODS[o]}</span></label>`).join('');
+}
+
+function invalidateCrud() { crudPlan = null; renderCrudFoot(); }
+
+function renderCrudFoot() {
+  const n = crudPlan?.created ?? 0;
+  $('#drawer-foot').innerHTML = `<button onclick="closeDrawer()">Close</button>
+    <button ${crudPlan ? '' : 'class="primary"'} onclick="dryRunCrud()">2 · Dry run</button>
+    <button class="primary" onclick="confirmCrud()" ${crudPlan?.succeeded && n ? '' : 'disabled title="Run a successful dry run with new endpoints first"'}>3 · Create ${n ? `${n} endpoint${n === 1 ? '' : 's'}` : ''}</button>`;
+}
+
+function crudQuery(dryRun) {
+  const form = new FormData($('#crud-options'));
+  const q = new URLSearchParams({ entity: form.get('entity') });
+  for (const name of ['routePrefix', 'group']) if (form.get(name)?.trim()) q.set(name, form.get(name).trim());
+  for (const op of form.getAll('operation')) q.append('operation', op);
+  if (form.get('enabled')) q.set('enabled', 'true');
+  if (dryRun) q.set('dryRun', 'true');
+  return q;
+}
+
+async function dryRunCrud() {
+  if (!new FormData($('#crud-options')).getAll('operation').length) { toast('Pick at least one operation'); return; }
+  const r = await api(`/scaffold/crud?${crudQuery(true)}`, { method: 'POST' });
+  crudPlan = r.ok ? r.data : null;
+  $('#crud-result').innerHTML = renderCrudResult(r, true);
+  renderCrudFoot();
+}
+
+async function confirmCrud() {
+  if (!crudPlan || !confirm(`Create ${crudPlan.created} endpoint(s) for ${crudPlan.entity}?`)) return;
+  const r = await api(`/scaffold/crud?${crudQuery(false)}`, { method: 'POST' });
+  crudPlan = null;
+  $('#crud-result').innerHTML = renderCrudResult(r, false);
+  renderCrudFoot();
+  if (r.ok) { toast(`Created ${r.data.created} endpoint(s)`); await load(); }
+}
+
+function renderCrudResult(r, dryRun) {
+  if (r.status !== 200 && r.status !== 422) return `<div class="errors">${esc(problemText(r.data))}</div>`;
+  const res = r.data;
+  const counts = [['created', 'Create'], ['skipped', 'Skip'], ['invalid', 'Invalid']]
+    .filter(([k]) => res[k]).map(([k, a]) => `<span class="pill a-${a}">${res[k]} ${k}</span>`).join(' ');
+  const banner = !res.succeeded
+    ? `<div class="errors"><b>${res.invalid} endpoint${res.invalid === 1 ? '' : 's'} can't be created – nothing ${dryRun ? 'would be' : 'was'} written.</b></div>`
+    : dryRun ? (res.created ? '<div class="notice"><span>Dry run – nothing was written yet. Review the endpoints, then click <b>Create</b>.</span></div>' : '<div class="success">Nothing to create – all routes exist already.</div>')
+    : `<div class="success">✓ Created ${res.created} endpoint${res.created === 1 ? '' : 's'}${res.skipped ? `, skipped ${res.skipped}` : ''}.</div>`;
+  return `${banner}
+    <section class="card"><h3>Endpoints <span class="muted" style="font-weight:normal">of ${esc(res.entity)}</span><span class="spacer"></span>${counts}</h3>
+      <table><thead><tr><th>Action</th><th>Endpoint</th><th class="hide-sm">Operation</th><th>Details</th><th></th></tr></thead><tbody>
+      ${res.operations.map((o, i) => `<tr>
+        <td><span class="pill a-${esc(o.action)}">${esc(o.action)}</span></td>
+        <td><span class="method m-${esc(o.method)}">${esc(o.method)}</span> <code>${esc(o.route)}</code></td>
+        <td class="hide-sm"><code>${esc(o.operation)}</code> <span class="muted">${o.definition.parameters.length} parameter${o.definition.parameters.length === 1 ? '' : 's'}</span></td>
+        <td>${Object.keys(o.errors || {}).length ? `<ul class="field-error" style="margin:0;padding-left:16px">${Object.entries(o.errors).map(([k, v]) => `<li><code>${esc(k)}</code>: ${esc(v.join(' '))}</li>`).join('')}</ul>` : o.action === 'Skip' ? '<span class="muted">the route exists</span>' : ''}</td>
+        <td class="actions"><button class="small" onclick="toggleCrudDefinition(${i})">Definition</button></td>
+      </tr><tr id="crud-def-${i}" hidden><td colspan="5"><pre class="response">${esc(json(o.definition))}</pre></td></tr>`).join('')}
+      </tbody></table>
+    </section>`;
+}
+
+function toggleCrudDefinition(i) { const row = document.getElementById(`crud-def-${i}`); row.hidden = !row.hidden; }
 
 // ---------- example values (fallback for servers without the snippets API) ----------
 const FORMAT_SCHEMA = { Email: 'email', Uri: 'uri', Phone: 'phone', Ipv4: 'ipv4', Ipv6: 'ipv6', Time: 'time' };

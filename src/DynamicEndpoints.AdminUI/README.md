@@ -24,18 +24,21 @@ prefix is reserved, so no dynamic endpoint can take it.
 
 - **Endpoints:** status (`Active`, `Disabled`, `Invalid`, `Pending`, `Draft`), drafts and scheduled publishes at a glance, filter, selection.
 - **Editor:** parameters with constraints and formats, JsonLogic rules, custom validators, processor configuration (forms for
-  `http-forward`, `webhook`, `response` and `sql-query`, or JSON), security, caching and rate limits, documentation. *Validate*,
+  `http-forward`, `webhook`, `response`, `sql-query` and `ef-crud` – with the exposed entities and their fields – or JSON), security, caching and rate limits, documentation. *Validate*,
   *Save draft* (optionally with a publish time and a comment) or *Save & publish*; *Code* shows the request as curl, HTTPie or C#.
 - **History:** every revision with its kind and comment, view any of them, diff with the previous or the published one, roll back.
 - **Try:** a form generated from the definition, filled from the server's snippet generator, with *Copy as curl / HTTPie /
   C# HttpClient*.
 - **Export & import:** all, shown or selected endpoints as JSON or YAML; import with `create`, `upsert` or `sync`, always after
   a dry run. Plus an **OpenAPI import** wizard.
+- **Scaffold CRUD:** pick an entity exposed with `AddEntityFrameworkCrud`, the operations and a route prefix, check the dry run,
+  create the endpoints (DynamicEndpoints.EntityFrameworkCore).
 - **Audit log:** per endpoint and for everything, with filters.
 - **Tenants:** tenant filter and column, a tenant field in the editor, and a *Try* console that sends the tenant.
 
 The panel asks the admin API's `GET /info` what the server supports and shows only that: drafts and history need a store that
-keeps them, the audit log a queryable sink, YAML `AddYamlFormat()`, tenants `UseMultiTenancy()`.
+keeps them, the audit log a queryable sink, YAML `AddYamlFormat()`, tenants `UseMultiTenancy()`,
+the `ef-crud` form and *Scaffold CRUD* `AddEntityFrameworkCrud()` (with at least one entity the admin API's tenant may use).
 
 ## A panel per tenant
 

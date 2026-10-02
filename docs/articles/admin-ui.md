@@ -27,8 +27,8 @@ Open `/admin/`. Without arguments the panel is at `/admin` and talks to `/_dynam
 - **Editor:** everything a definition has: parameters with constraints and formats, JsonLogic rules, custom validators, processor
   configuration, security, caching and rate limits, documentation. *Validate*, *Save draft* (with an optional publish time and
   comment) or *Save & publish*. *Code* shows the example request of the unsaved definition as curl, HTTPie or C#.
-- **Processor forms:** the [built-in processors](built-in-processors.md) `http-forward`, `webhook`, `response` and `sql-query`
-  get a form for their configuration, with a *Form / JSON* toggle. Other processors (and built-in ones registered under a name
+- **Processor forms:** the [built-in processors](built-in-processors.md) `http-forward`, `webhook`, `response` and `sql-query`,
+  and [`ef-crud`](ef-crud.md), get a form for their configuration, with a *Form / JSON* toggle. Other processors (and built-in ones registered under a name
   of your own) are configured as JSON, with their configuration example one click away.
 - **Caching & rate limits:** `Cache-Control` (max age, visibility, no-store), ETag, output cache and vary settings, and a rate
   limit with algorithm, partition and an optional quota ([caching & rate limits](caching-and-rate-limits.md)).
@@ -46,6 +46,11 @@ Open `/admin/`. Without arguments the panel is at `/admin` and talks to `/_dynam
   document's tags – a tag → processor table. The dry run lists per operation what would happen (create, update with the changed
   properties, unchanged, delete, skip with the reason, invalid), the processor and where it came from, the definition and the
   unmapped details; *Import* asks for confirmation, naming what will be created, updated and deleted.
+- **ef-crud form:** an entity picker and the operations it allows (from `GET /crud/entities`), paging, sort and filter
+  settings, and a table of the entity's fields – type, writable, filter operators, sortable – so parameters can be named after them.
+- **Scaffold CRUD:** a wizard for [scaffolding from the EF model](ef-crud.md#scaffolding-from-the-model): entity, operations,
+  route prefix, group, enabled. The dry run lists the endpoints that would be created or skipped (the route exists) with their
+  definitions and errors; *Create* asks for confirmation.
 - **Audit log:** per endpoint, and the whole log with filters for endpoint, tenant, user and time ([audit log](audit-log.md)).
 
 <img src="../images/editor.jpg" alt="Endpoint editor" width="820">
@@ -53,7 +58,8 @@ Open `/admin/`. Without arguments the panel is at `/admin` and talks to `/_dynam
 ## Only what the server supports
 
 On start the panel asks [`GET /info`](admin-api.md#info) what the admin API supports. Tenancy shows up only with
-`UseMultiTenancy()`, the audit log only with a queryable sink, YAML only with `AddYamlFormat()`. Drafts and history appear when
+`UseMultiTenancy()`, the audit log only with a queryable sink, YAML only with `AddYamlFormat()`, the `ef-crud` form and *Scaffold CRUD* only when
+`features` contains `crud` (`AddEntityFrameworkCrud()` with an entity the admin API's tenant may use). Drafts and history appear when
 the store keeps them (the in-memory and EF Core stores do); with other stores those buttons are hidden.
 
 Against an older server without `/info` the panel still works: the audit log shows when `/audit` answers, tenancy once an

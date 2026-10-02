@@ -1,4 +1,4 @@
-# Built-in processors: HTTP forward, webhook, response template, SQL
+# Built-in processors: HTTP forward, webhook, response template, SQL, EF Core CRUD
 
 Batteries included, but opt-in: nothing is registered until you ask for it. Their configuration is typed and validated on save
 (unknown properties are errors).
@@ -6,7 +6,8 @@ Batteries included, but opt-in: nothing is registered until you ask for it. Thei
 ```csharp
 builder.Services.AddDynamicEndpoints()
     .AddBuiltInProcessors(o => o.AllowedHosts.Add("*.internal.example.com"))   // http-forward, webhook, response
-    .AddSqlQueryProcessor(_ => new NpgsqlConnection(readOnlyConnectionString));  // DynamicEndpoints.Sql package
+    .AddSqlQueryProcessor(_ => new NpgsqlConnection(readOnlyConnectionString))   // DynamicEndpoints.Sql package
+    .AddEntityFrameworkCrud<AppDbContext>(crud => crud.Entity<Product>(e => e.Fields(p => p.Name, p => p.Price)));  // ef-crud
 
 builder.Services.AddHttpClient("DynamicEndpoints").AddStandardResilienceHandler();  // optional: the processors' named client
 ```
@@ -20,6 +21,7 @@ name of its own.
 | `webhook` | `url`, `method`, `headers`, `payload`, `retries`, `retryDelayMilliseconds`, `timeoutSeconds`, `signingSecretConfigurationKey`, `signatureHeader`, `background`, `statusCode` | JSON webhook with exponential back-off, HMAC-SHA256 signature and an `X-Webhook-Delivery` id |
 | `response` | `body` (JSON template) or `text`, `statusCode`, `contentType`, `headers` | mock APIs, fixed answers, request-to-response mapping |
 | `sql-query` | `query` with `@name` placeholders, `result` (`Rows`/`Row`/`Value`), `maxRows`, `timeoutSeconds`, `connection` | read-only SQL, see [below](#sql-dynamicendpointssql) |
+| `ef-crud` | `entity`, `operation` (`list`/`get`/`create`/`update`/`patch`/`delete`), `key`, `pageSize`, `maxPageSize`, `sort`, `sortParameter`, `filters`, `requireIfMatch` | CRUD on allowlisted EF Core entities (`DynamicEndpoints.EntityFrameworkCore`), see [CRUD on EF Core entities](ef-crud.md) |
 
 ```json
 { "processor": "http-forward", "processorConfig": {
@@ -95,6 +97,9 @@ Treat "can edit definitions" as "can read what the connection's database user ca
 - Responses can contain anything the query selects: don't select secrets, and use `maxRows` to keep responses small.
 
 ## With multi-tenancy
+
+`ef-crud` filters rows by a tenant column and keeps entities without one away from tenants – see
+[CRUD on EF Core entities](ef-crud.md#multi-tenancy).
 
 The processors see the request's tenant like any processor (`request.Tenant`), but their configuration is per definition: a
 tenant's endpoint can forward to the tenant's own backend, a shared endpoint forwards every tenant to the same target.

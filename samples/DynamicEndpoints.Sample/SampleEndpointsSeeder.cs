@@ -1,3 +1,4 @@
+using DynamicEndpoints.EntityFrameworkCore;
 using DynamicEndpoints.Sample.Processors;
 using DynamicEndpoints.Sample.Validators;
 
@@ -7,7 +8,8 @@ namespace DynamicEndpoints.Sample;
 /// Endpoints created on first start, so the panel is not empty. Shows the fluent builder API.
 /// Registered with <c>.AddSeeder&lt;SampleEndpointsSeeder&gt;()</c> – the manager is constructor-injected.
 /// </summary>
-public sealed class SampleEndpointsSeeder(IDynamicEndpointManager manager, ILogger<SampleEndpointsSeeder> logger) : IDynamicEndpointSeeder
+public sealed class SampleEndpointsSeeder(IDynamicEndpointManager manager, IDynamicCrudScaffolder crud, ILogger<SampleEndpointsSeeder> logger)
+    : IDynamicEndpointSeeder
 {
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
@@ -158,6 +160,24 @@ public sealed class SampleEndpointsSeeder(IDynamicEndpointManager manager, ILogg
             {
                 logger.LogDebug(ex, "Sample endpoint {Method} {Route} was not seeded – another instance was faster.", definition.Method, definition.Route);
             }
+        }
+
+        // ef-crud: list, get, create, update and patch of the products allowlisted in Program.cs, generated from the EF model –
+        // the same as "Scaffold CRUD" in the panel. Shared endpoints, so each tenant (X-Tenant: acme / globex) sees its own rows.
+        try
+        {
+            var scaffolded = await crud.ScaffoldAsync("products", new DynamicCrudScaffoldOptions
+            {
+                RoutePrefix = "/shop/products",
+                Group = "Shop (ef-crud)",
+                Operations = CrudOperations.All & ~CrudOperations.Delete,
+                Enabled = true,
+            }, cancellationToken);
+            seeded += scaffolded.Created;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(ex, "The ef-crud sample endpoints were not seeded.");
         }
 
         logger.LogInformation("Seeded {Count} sample endpoints.", seeded);

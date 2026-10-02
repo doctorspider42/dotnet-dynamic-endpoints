@@ -65,6 +65,25 @@ The tenant comes from the route parameter of the prefix, or from the resolvers w
 with `FromClaim()`). `GET /info` of a tenant admin API names its tenant, and the [admin panel](admin-ui.md#a-panel-per-tenant)
 can sit on top of it: `app.MapDynamicEndpointsAdminUI("/admin/tenants/{tenant}", "/api/tenants/{tenant}/endpoints")`.
 
+## Data of tenants: `ef-crud`
+
+The [`ef-crud` processor](ef-crud.md) keeps tenants' rows apart when the entity has a tenant column:
+
+```csharp
+.AddEntityFrameworkCrud<AppDbContext>(crud => crud
+    .Entity<Product>(e => e.Fields(p => p.Sku, p => p.Name).TenantColumn(p => p.TenantId))
+    .Entity<Country>(e => e.AllFields().SharedAcrossTenants())
+    .Entity<Setting>(e => e.AllFields()))                         // shared endpoints only
+```
+
+- Every query is filtered by the tenant and new rows get it; the column is never writable from a request. The tenant is the
+  endpoint's own one, or for a shared endpoint the request's (`DynamicRequest.Tenant`). Requests without a tenant get `404`,
+  never all rows.
+- Entities without a tenant column can't be used by tenants' endpoints unless `SharedAcrossTenants()` or `AllowTenants(…)`
+  allows it – checked on save (also through a tenant's admin API) and before every request.
+- A tenant's admin API lists (`GET /crud/entities`) and scaffolds (`POST /scaffold/crud`) only what its tenant may use; scaffolded
+  endpoints belong to the tenant.
+
 ## Drafts, history, export and import per tenant
 
 Everything on top of the manager follows the tenant's view, so a tenant admin can work with drafts, history and GitOps without
