@@ -69,7 +69,9 @@ internal sealed class DynamicEndpointTransfer(
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var rehearsal = new OverlayDynamicEndpointStore(scope.ServiceProvider.GetRequiredService<IDynamicEndpointStore>());
-            await ExecuteAsync(manager.BeginChanges(rehearsal), plan, cancellationToken);
+            var changes = manager.BeginChanges(rehearsal);
+            changes.IsRehearsal = true;
+            await ExecuteAsync(changes, plan, cancellationToken);
         }
 
         var succeeded = plan.All(p => p.Item.Action != DynamicEndpointImportAction.Invalid);

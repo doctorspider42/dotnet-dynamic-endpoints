@@ -547,6 +547,26 @@ public sealed class EntityFrameworkCrudTests : IDisposable
     }
 
     [Fact]
+    public async Task A_tenant_header_the_application_documents_as_optional_is_required_on_tenant_data()
+    {
+        await using var host = await TestHost.StartAsync(
+            options: o => o.OpenApi.AddHeader("X-Tenant-Id", "The tenant."),
+            configure: b =>
+            {
+                b.Services.AddDbContext<CrudDbContext>(o => o.UseSqlite(ConnectionString));
+                b.UseMultiTenancy(t => t.FromHeader()).AddEntityFrameworkCrud<CrudDbContext>(DefaultCrud);
+            });
+        await host.Manager.CreateAsync(DynamicEndpoint.Get("/products").HandledByCrud<CrudProduct>(CrudOperation.List));
+        await host.Manager.CreateAsync(DynamicEndpoint.Get("/orders").HandledByCrud<CrudOrder>(CrudOperation.List));
+
+        var paths = (await host.Client.GetFromJsonAsync<JsonObject>("/openapi/dynamic.json"))!["paths"]!;
+        static JsonNode TenantHeader(JsonNode operation) =>
+            Assert.Single(operation["parameters"]!.AsArray(), p => (string?)p!["name"] == "X-Tenant-Id")!;
+        Assert.True((bool)TenantHeader(paths["/products"]!["get"]!)["required"]!);
+        Assert.False((bool?)TenantHeader(paths["/orders"]!["get"]!)["required"] ?? false);
+    }
+
+    [Fact]
     public async Task A_shared_endpoint_of_tenant_data_tells_how_to_send_the_tenant()
     {
         await using var host = await StartAsync();

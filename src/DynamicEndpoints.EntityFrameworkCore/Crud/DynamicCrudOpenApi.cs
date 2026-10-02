@@ -133,8 +133,15 @@ internal sealed class DynamicCrudOpenApi(IServiceProvider services) : IPostConfi
         if (definition.Tenant is null && entity.Tenant is not null && DynamicCrudTenancy.HeaderName(services) is { } tenantHeader)
         {
             var parameters = operation["parameters"] as JsonArray ?? [];
-            if (!parameters.Any(p => p?["in"]?.GetValue<string>() == "header"
-                    && string.Equals(p["name"]?.GetValue<string>(), tenantHeader, StringComparison.OrdinalIgnoreCase)))
+            var documented = parameters.OfType<JsonObject>().FirstOrDefault(p => p["in"]?.GetValue<string>() == "header"
+                && string.Equals(p["name"]?.GetValue<string>(), tenantHeader, StringComparison.OrdinalIgnoreCase));
+            if (documented is not null)
+            {
+                // A common header the application documents as optional is required here.
+                documented["required"] = true;
+                operation["parameters"] = parameters.DeepClone();
+            }
+            else
             {
                 parameters.Add(new JsonObject
                 {

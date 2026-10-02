@@ -22,6 +22,9 @@ namespace DynamicEndpoints;
 public sealed class DynamicEndpointChangeSet
 {
     private readonly DynamicEndpointManager _manager;
+
+    /// <summary>A rehearsal (dry run, import validation) – writes go to a throwaway store, so nothing is logged as done.</summary>
+    internal bool IsRehearsal { get; set; }
     private readonly IDynamicEndpointStore _store;
     private readonly IDynamicEndpointRevisionStore? _revisions;
     private readonly List<StagedChange> _changes = [];
@@ -292,7 +295,11 @@ public sealed class DynamicEndpointChangeSet
 
         await _store.AddAsync(d, cancellationToken);
         Stage(DynamicEndpointChangeKind.Created, d, null, compiled);
-        _manager.Logger.LogInformation("Created dynamic endpoint {Method} {Route} ({Id}).", d.Method, d.Route, d.Id);
+        if (!IsRehearsal)
+        {
+            _manager.Logger.LogInformation("Created dynamic endpoint {Method} {Route} ({Id}).", d.Method, d.Route, d.Id);
+        }
+
         return DynamicEndpointsJson.DeepClone(d);
     }
 
@@ -326,7 +333,11 @@ public sealed class DynamicEndpointChangeSet
 
         await _store.UpdateAsync(d, current.Revision, cancellationToken);
         Stage(DynamicEndpointChangeKind.Updated, d, current, compiled);
-        _manager.Logger.LogInformation("Updated dynamic endpoint {Method} {Route} ({Id}) to revision {Revision}.", d.Method, d.Route, d.Id, d.Revision);
+        if (!IsRehearsal)
+        {
+            _manager.Logger.LogInformation("Updated dynamic endpoint {Method} {Route} ({Id}) to revision {Revision}.", d.Method, d.Route, d.Id, d.Revision);
+        }
+
         return DynamicEndpointsJson.DeepClone(d);
     }
 

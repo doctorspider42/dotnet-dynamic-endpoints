@@ -3,11 +3,45 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace DynamicEndpoints.Tests;
 
 public sealed class TransferTests
 {
+    [Fact]
+    public async Task Dry_runs_and_rehearsals_log_only_what_was_really_written()
+    {
+        var logs = new CapturingLoggerProvider();
+        await using var host = await TestHost.StartAsync(configure: b => b.Services.AddSingleton<ILoggerProvider>(logs));
+        var transfer = host.Services.GetRequiredService<IDynamicEndpointTransfer>();
+        var file = new DynamicEndpointExport { Endpoints = [DynamicEndpoint.Get("/logged").HandledBy("echo")] };
+
+        await transfer.ImportAsync(file, new() { DryRun = true });
+        Assert.DoesNotContain(logs.Messages, m => m.StartsWith("Created dynamic endpoint"));
+
+        await transfer.ImportAsync(file);
+        Assert.Single(logs.Messages, m => m.StartsWith("Created dynamic endpoint GET /logged"));
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider, ILogger
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Enqueue(formatter(state, exception));
+
+        public void Dispose()
+        {
+        }
+    }
+
     [Fact]
     public async Task Unpublished_drafts_are_neither_exported_nor_matched_on_import()
     {
