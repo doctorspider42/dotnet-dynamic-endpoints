@@ -74,6 +74,8 @@ dynamic-endpoints export -o endpoints.yaml    # .json or .yaml; or ids: export 0
 dynamic-endpoints diff endpoints.yaml         # what 'push --sync' would change
 dynamic-endpoints push endpoints.yaml --sync  # create, update, delete
 dynamic-endpoints import-openapi partner-api.yaml --processor http-forward --route-prefix /partners --dry-run
+dynamic-endpoints import-openapi petstore.yaml --mock --enabled                   # a mock API from the examples
+dynamic-endpoints import-openapi partner-api.yaml --mode sync --processor-by-tag Reports=sql-query --options import.json
 ```
 
 ```text
@@ -84,13 +86,25 @@ $ dynamic-endpoints diff endpoints.yaml
 Dry run: 1 to create, 1 to update, 1 to delete, 4 unchanged, 0 skipped, 0 invalid.
 ```
 
+`import-openapi` prints the same diff per operation, with the processor and where it came from:
+
+```text
+$ dynamic-endpoints import-openapi shop.yaml --mode sync --dry-run
++ create    POST   /orders  → echo (the processor option)
+~ update    GET    /orders/{id}  → sql-query (x-dynamic-endpoints-processor of the operation)  [parameters]
+- delete    GET    /customers
+· skipped   GET    /reports
+      GET /reports exists already and wasn't imported from this document – it is left alone.
+Dry run: 1 to create, 1 to update, 1 to delete, 2 unchanged, 1 skipped, 0 invalid.
+```
+
 | Command | |
 |---|---|
 | `list` | endpoints with their status on the instance that answered |
 | `export [<id>…]` | the stable export format; `--output <file>`, `--format json\|yaml` (default: by extension) |
 | `push <file>` (`import`) | `--mode create\|upsert\|sync` (default `upsert`), `--sync`, `--dry-run` |
 | `diff <file>` | `push --sync --dry-run`, with exit code 2 when there are differences |
-| `import-openapi <file>` | skeletons from OpenAPI 3.x; `--processor`, `--route-prefix`, `--group`, `--tag`, `--enabled`, `--skip-invalid`, `--dry-run` |
+| `import-openapi <file>` | endpoints from OpenAPI 3.x ([details](openapi-import.md)); `--mode create\|upsert\|sync` (default `create`), `--processor`, `--processor-by-tag <tag>=<processor>` (repeatable), `--mock`, `--document-id`, `--options <file>` (import options as JSON or YAML, e.g. `processorConfig` and `processorsByTag` with configurations), `--route-prefix`, `--group`, `--tag`, `--enabled`, `--skip-invalid`, `--dry-run` |
 
 Options: `--url` (`DYNAMIC_ENDPOINTS_URL`), `--api-key` (`DYNAMIC_ENDPOINTS_API_KEY`), `--api-key-header`
 (`DYNAMIC_ENDPOINTS_API_KEY_HEADER`, default `X-Api-Key`), `--token` (`DYNAMIC_ENDPOINTS_TOKEN`), `-H "Name: value"` (repeatable),

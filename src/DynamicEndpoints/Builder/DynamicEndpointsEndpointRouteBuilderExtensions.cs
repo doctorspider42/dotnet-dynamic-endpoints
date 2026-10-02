@@ -180,25 +180,18 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapPost("/import/openapi", async Task<IResult> (HttpContext context, bool? dryRun, string? processor, string? routePrefix,
-                string? group, [FromQuery] string[]? tag, bool? enabled, bool? skipInvalid, IDynamicEndpointOpenApiImporter importer,
+                string? group, [FromQuery] string[]? tag, bool? enabled, bool? skipInvalid, string? mode, bool? mock,
+                [FromQuery] string[]? processorByTag, string? documentId, IDynamicEndpointOpenApiImporter importer,
                 IEnumerable<IDynamicEndpointsTextFormat> formats, CancellationToken ct) =>
             {
                 OpenApiImportResult result;
                 try
                 {
                     var text = await ReadBodyAsync(context, ct);
-                    var document = DynamicEndpointsTextFormats.ForContentType(formats, context.Request.ContentType).Parse(text)
-                        ?? throw new FormatException("The document is empty.");
-                    result = await importer.ImportAsync(document, new OpenApiImportOptions
-                    {
-                        DryRun = dryRun ?? false,
-                        Processor = processor,
-                        RoutePrefix = routePrefix,
-                        Group = group,
-                        Tags = tag is { Length: > 0 } ? tag : null,
-                        Enabled = enabled ?? false,
-                        SkipInvalid = skipInvalid ?? false,
-                    }, ct);
+                    var (document, options) = OpenApiImportRequest.Read(
+                        DynamicEndpointsTextFormats.ForContentType(formats, context.Request.ContentType).Parse(text),
+                        new OpenApiImportQuery(dryRun, processor, routePrefix, group, tag, enabled, skipInvalid, mode, mock, processorByTag, documentId));
+                    result = await importer.ImportAsync(document, options, ct);
                 }
                 catch (FormatException ex)
                 {
@@ -207,7 +200,9 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
 
                 return TypedResults.Json(result, statusCode: result.Succeeded ? StatusCodes.Status200OK : StatusCodes.Status422UnprocessableEntity);
             })
-            .WithSummary("Creates endpoint skeletons from an OpenAPI 3.x document (JSON, or YAML with DynamicEndpoints.Yaml). ?dryRun=true reports what would be created and what couldn't be mapped.")
+            .WithSummary("Creates endpoint skeletons from an OpenAPI 3.x document (JSON, or YAML with DynamicEndpoints.Yaml), or { document, options }. " +
+                "?mode=create|upsert|sync re-imports, ?mock=true answers with the documented examples, ?processorByTag=tag:processor, " +
+                "?dryRun=true reports the diff and what couldn't be mapped.")
             .Accepts<JsonObject>("application/json", "application/yaml")
             .Produces<OpenApiImportResult>()
             .Produces<OpenApiImportResult>(StatusCodes.Status422UnprocessableEntity)

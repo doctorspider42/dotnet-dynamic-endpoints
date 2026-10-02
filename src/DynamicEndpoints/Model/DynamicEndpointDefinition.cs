@@ -85,6 +85,12 @@ public sealed record DynamicEndpointDefinition
     /// <summary><c>Cache-Control</c>, ETags and server-side output caching of responses.</summary>
     public DynamicEndpointCaching? Caching { get; init; }
 
+    /// <summary>
+    /// Where the definition came from, e.g. the OpenAPI operation it was imported from – a re-import updates (or a sync deletes)
+    /// only endpoints with its origin. <c>null</c> for endpoints created by hand.
+    /// </summary>
+    public DynamicEndpointOrigin? Origin { get; init; }
+
     /// <summary>Disabled endpoints are persisted but not routable.</summary>
     public bool Enabled { get; init; } = true;
 
