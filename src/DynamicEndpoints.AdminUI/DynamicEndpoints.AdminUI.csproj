@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>DynamicEndpoints.AdminUI</PackageId>
-    <Description>Ready-made admin panel for DynamicEndpoints: list, editor, drafts and scheduled publishing, history with diffs and rollback, and a "Try" console with generated examples and curl / HTTPie / C# snippets. One line to map, no dependencies.</Description>
+    <Description>Ready-made admin panel for DynamicEndpoints: list, editor (with caching, rate limits and forms for the built-in processors), drafts and scheduled publishing, history with diffs and rollback, audit log, export/import with dry runs, an OpenAPI import wizard, multi-tenancy, and a "Try" console with generated examples and curl / HTTPie / C# snippets. One line to map, no dependencies.</Description>
     <PackageTags>$(PackageTags);admin;ui;dashboard</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
