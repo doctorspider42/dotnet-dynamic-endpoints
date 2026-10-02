@@ -19,6 +19,8 @@ validated on save, persisted, and documented as OpenAPI 3.1.
 - 🪝 **Filters:** access checks before validation, your own error format, logging and metering of rejected requests.
 - 🌍 **Localized errors:** English and Polish built in, overridable texts, stable error codes.
 - 📝 **Drafts & history:** publish changes now or at a set time, diff revisions, roll back.
+- 🏢 **Multi-tenancy:** endpoints per tenant on the same routes, with a scoped manager, admin API, drafts, history and export/import.
+- 🧾 **Audit log:** who changed what and when, property by property, queryable through the admin API.
 - 📈 **Metrics & tracing:** per-endpoint requests, validation failures by layer, processor duration and spans via `System.Diagnostics`.
 - ⚙️ **Processors:** validated input goes to your own, statically typed code with full DI.
 - 🔋 **Built-in processors (opt-in):** HTTP forward, webhook with retries and signatures, response templates.
@@ -27,6 +29,7 @@ validated on save, persisted, and documented as OpenAPI 3.1.
 - 📜 **OpenAPI 3.1:** generated from the definitions, ready for Swagger UI, with security schemes, common headers and hooks.
 - 🔐 **First-class endpoints:** authorization policies, rate limiting and conventions work as usual.
 - 🚦 **Safe by design:** no code execution, ReDoS-proof regexes, size limits, conflict detection.
+- 🔍 **Analyzers:** invalid routes, regexes, JsonLogic rules and processor types are reported at build time.
 - 🪶 **Zero third-party dependencies.**
 
 ## Quick start
@@ -67,16 +70,23 @@ public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderCon
 }
 ```
 
-The default store is in-memory. For persistence add
-[DynamicEndpoints.EntityFrameworkCore](https://www.nuget.org/packages/DynamicEndpoints.EntityFrameworkCore).
-For FluentValidation support add [DynamicEndpoints.FluentValidation](https://www.nuget.org/packages/DynamicEndpoints.FluentValidation).
-For instant propagation across instances add [DynamicEndpoints.PostgreSql](https://www.nuget.org/packages/DynamicEndpoints.PostgreSql)
-(`LISTEN/NOTIFY`) or [DynamicEndpoints.Redis](https://www.nuget.org/packages/DynamicEndpoints.Redis) (pub/sub), for tests
-[DynamicEndpoints.Testing](https://www.nuget.org/packages/DynamicEndpoints.Testing), and for OpenTelemetry
-[DynamicEndpoints.OpenTelemetry](https://www.nuget.org/packages/DynamicEndpoints.OpenTelemetry).
+The default store is in-memory. More packages:
+
+| Package | |
+|---|---|
+| [DynamicEndpoints.AdminUI](https://www.nuget.org/packages/DynamicEndpoints.AdminUI) | the admin panel, `MapDynamicEndpointsAdminUI()` |
+| [DynamicEndpoints.EntityFrameworkCore](https://www.nuget.org/packages/DynamicEndpoints.EntityFrameworkCore) | persistence, history and drafts |
+| [DynamicEndpoints.FluentValidation](https://www.nuget.org/packages/DynamicEndpoints.FluentValidation) | FluentValidation validators |
+| [DynamicEndpoints.PostgreSql](https://www.nuget.org/packages/DynamicEndpoints.PostgreSql) · [DynamicEndpoints.Redis](https://www.nuget.org/packages/DynamicEndpoints.Redis) | instant propagation across instances (`LISTEN/NOTIFY`, pub/sub) |
+| [DynamicEndpoints.OpenTelemetry](https://www.nuget.org/packages/DynamicEndpoints.OpenTelemetry) | `AddDynamicEndpointsInstrumentation()` |
+| [DynamicEndpoints.Sql](https://www.nuget.org/packages/DynamicEndpoints.Sql) | read-only SQL query processor |
+| [DynamicEndpoints.Yaml](https://www.nuget.org/packages/DynamicEndpoints.Yaml) | YAML for export, import and the OpenAPI import |
+| [DynamicEndpoints.Testing](https://www.nuget.org/packages/DynamicEndpoints.Testing) | in-memory store and test server |
+| [DynamicEndpoints.Cli](https://www.nuget.org/packages/DynamicEndpoints.Cli) | the `dynamic-endpoints` tool for GitOps |
+| [DynamicEndpoints.Templates](https://www.nuget.org/packages/DynamicEndpoints.Templates) | `dotnet new dynamic-endpoints` |
 
 ## Learn more
 
-- 📖 [Documentation, screenshots & sample app](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme)
+- 📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/) · [Screenshots & sample app](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme)
 - 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)
 - 🐛 [Issues](https://github.com/doctorspider42/dotnet-dynamic-endpoints/issues)

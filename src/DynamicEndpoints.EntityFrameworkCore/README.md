@@ -58,5 +58,5 @@ through your scoped DbContext, inside `db.Database.BeginTransactionAsync()`.
   saved in the same `SaveChanges` as the definition it belongs to, and a publish removes its draft in it too.
 - **Providers:** any EF Core relational provider works (SQL Server, PostgreSQL, SQLite, MySQL, …).
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/ef-core.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

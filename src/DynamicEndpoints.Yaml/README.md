@@ -4,6 +4,8 @@ YAML support for [DynamicEndpoints](https://github.com/doctorspider42/dotnet-dyn
 definitions as YAML (handy for GitOps reviews), and import OpenAPI documents written in YAML. Built on
 [YamlDotNet](https://github.com/aaubry/YamlDotNet).
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/LICENSE)
+
 ```csharp
 builder.Services.AddDynamicEndpoints().AddYamlFormat();
 ```
@@ -35,3 +37,6 @@ endpoints:
 In code, `DynamicEndpointsYaml.Parse(yaml)` and `DynamicEndpointsYaml.Write(node)` convert between YAML and `JsonNode`. Plain
 scalars follow the YAML 1.2 core schema, and strings that would read as something else (`"true"`, `"007"`) are written quoted, so
 a round trip never changes a type. The `dynamic-endpoints` CLI reads and writes `.yaml` files with this package.
+
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/export-import-gitops.html) ·
+📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

@@ -4,6 +4,8 @@ A read-only, parameterized SQL query processor for [DynamicEndpoints](https://gi
 an admin writes a `SELECT`, the endpoint returns the rows as JSON. Works with any ADO.NET provider (SQL Server, PostgreSQL,
 SQLite, MySQL, …). No third-party dependencies.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/LICENSE)
+
 ```csharp
 builder.Services.AddDynamicEndpoints()
     .AddSqlQueryProcessor(_ => new NpgsqlConnection(builder.Configuration.GetConnectionString("ReadOnly")),
@@ -50,3 +52,6 @@ Treat "can edit definitions" as "can read what the connection's database user ca
   `lo_export`, `nextval`) can't be detected lexically. **Use a dedicated database user with `SELECT` rights on exactly the
   tables and views the endpoints may expose**, and keep the admin API behind authorization.
 - Responses can contain anything the query selects: don't select secrets, and use `maxRows` to keep responses small.
+
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/built-in-processors.html) ·
+📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

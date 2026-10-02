@@ -38,5 +38,5 @@ Drafts and history need a store that keeps them (the in-memory and EF Core store
 - Files are sent with an `ETag`, and the page is never cached, so a deployment never mixes old scripts with a new page.
 - The page sets `X-Content-Type-Options: nosniff`, `frame-ancestors 'none'` and `Referrer-Policy: no-referrer`.
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/admin-ui.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

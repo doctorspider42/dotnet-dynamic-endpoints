@@ -43,5 +43,5 @@ await using var a = await DynamicEndpointsTestServer.StartAsync(options);
 await using var b = await DynamicEndpointsTestServer.StartAsync(options);
 ```
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/testing.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

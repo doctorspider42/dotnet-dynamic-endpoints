@@ -34,5 +34,5 @@ Every measurement carries `dynamic_endpoint.id`, `dynamic_endpoint.name`, `dynam
 `DynamicEndpoints.Validation.{layer}` (one per layer that ran) and `DynamicEndpoints.Processor`. Failed validation layers and
 exceptions set the span status to `Error`.
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/telemetry.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

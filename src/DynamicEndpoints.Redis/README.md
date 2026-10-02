@@ -26,5 +26,5 @@ builder.Services.AddDynamicEndpoints().UseRedisChangeNotifications(o => o.Channe
   disconnected subscribers.
 - Notifications only trigger a reload from the store. Keep `RefreshInterval` as the fallback.
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multiple-instances.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

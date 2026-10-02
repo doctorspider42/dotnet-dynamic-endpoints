@@ -26,5 +26,5 @@ builder.Services.AddDynamicEndpoints().UsePostgreSqlChangeNotifications(o => o.C
   reconnect it reloads, in case it missed something.
 - Notifications only trigger a reload from the store, so a lost one costs nothing but time. Keep `RefreshInterval` as the fallback.
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multiple-instances.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)
