@@ -233,12 +233,15 @@ three runs), allocations were stable. Run them yourself with
 dotnet run --project samples/DynamicEndpoints.Sample
 ```
 
-- 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the `DynamicEndpoints.AdminUI` package. List, editor, drafts and scheduled
-  publishing, history with diffs and rollback, and a "Try" console with generated examples and curl / HTTPie / C# snippets.
+- 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the `DynamicEndpoints.AdminUI` package. Editor with processor forms,
+  caching and rate limits, drafts and history, export/import, OpenAPI import, audit log and a "Try" console with snippets.
+- 🏢 **Tenants:** tenant picked by the `X-Tenant` header; acme's own panel at `http://localhost:5118/admin/tenants/acme/`.
 - 📜 **Swagger UI:** `http://localhost:5118/swagger`, with the *Dynamic endpoints* and *Admin API* documents.
-- 🧩 **Processors:** `echo`, `template`, `calculator`, `collection` (a JSON document store in SQLite) and an inline `clock`.
-- 🛡️ **Validators:** `nip` (C#), `unique-value` (C#, DB lookup), `iban` and `booking-request` (FluentValidation). `POST /contacts` shows the built-in formats.
-- 🌱 **Seeding:** `SampleEndpointsSeeder` seeds the demo endpoints on the first start.
+- 🧩 **Processors:** `echo`, `template`, `calculator`, `collection` and an inline `clock`, plus the built-in `http-forward`,
+  `webhook`, `response` and `sql-query`.
+- 🌱 **Seeded demos:** `GET /products/{sku}` (cached, rate-limited, with a quota), `GET /reports/documents` (SQL),
+  `GET /welcome` (only for `X-Tenant: acme`), `POST /contacts` (built-in formats). Seeded into an empty store only.
+- 🛡️ **Validators:** `nip` (C#), `unique-value` (C#, DB lookup), `iban` and `booking-request` (FluentValidation).
 - 📝 **Audit log:** the latest changes at `GET /api/admin/endpoints/audit`.
 - 👋 **Custom management API:** `Greetings/` builds its own API on the injected `IDynamicEndpointManager`.
 

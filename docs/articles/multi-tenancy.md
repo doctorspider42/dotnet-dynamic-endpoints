@@ -62,7 +62,8 @@ app.MapDynamicEndpointsTenantAdmin("/api/tenants/{tenant}/endpoints")
 ```
 
 The tenant comes from the route parameter of the prefix, or from the resolvers when the prefix has none (e.g. `/api/my/endpoints`
-with `FromClaim()`).
+with `FromClaim()`). `GET /info` of a tenant admin API names its tenant, and the [admin panel](admin-ui.md#a-panel-per-tenant)
+can sit on top of it: `app.MapDynamicEndpointsAdminUI("/admin/tenants/{tenant}", "/api/tenants/{tenant}/endpoints")`.
 
 ## Drafts, history, export and import per tenant
 
@@ -78,6 +79,8 @@ seeing anybody else's endpoints:
 | [OpenAPI import](openapi-import.md) | skeletons belong to the tenant; "route already exists" means the tenant already has it |
 | [Audit log](audit-log.md) | only the tenant's entries |
 | Change sets | `ForTenant("acme").BeginChanges(…)` assigns the tenant to definitions and drafts |
+| [Snippets](admin-api.md#snippets) | requests of the tenant: tenant route prefix filled in, tenant header added |
+| [`/info`](admin-api.md#info) | `tenant` names the tenant of the admin API |
 
 ```bash
 dynamic-endpoints diff acme.yaml --url https://api.example.com/api/tenants/acme/endpoints
@@ -90,7 +93,9 @@ dynamic-endpoints push acme.yaml --sync --url https://api.example.com/api/tenant
   conflict check.
 - The tenant admin API needs the built-in transfer and OpenAPI importer: if you replaced `IDynamicEndpointTransfer` or
   `IDynamicEndpointOpenApiImporter`, their routes fail rather than leak other tenants' endpoints.
-- The [admin panel](admin-ui.md#with-multi-tenancy) can sit on top of a tenant admin API whose tenant comes from the resolvers.
+- **Admin panel:** the global panel has a tenant filter, a tenant field and a *Try* console that sends the tenant; one
+  `MapDynamicEndpointsAdminUI("/admin/tenants/{tenant}", "/api/admin/tenants/{tenant}/endpoints")` call serves a panel per
+  tenant on top of the tenant admin API ([admin panel](admin-ui.md#a-panel-per-tenant)).
 - **Caching and rate limits:** the output cache keeps the responses of tenant endpoints apart (only shared endpoints whose response
   depends on the tenant need the tenant header in `varyByHeader`); rate limits count per endpoint, so each tenant endpoint has its own budget
   ([caching & rate limits](caching-and-rate-limits.md#with-multi-tenancy)).
