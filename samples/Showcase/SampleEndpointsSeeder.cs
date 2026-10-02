@@ -1,8 +1,8 @@
 using DynamicEndpoints.EntityFrameworkCore;
-using DynamicEndpoints.Sample.Processors;
-using DynamicEndpoints.Sample.Validators;
+using DynamicEndpoints.Samples.Showcase.Processors;
+using DynamicEndpoints.Samples.Showcase.Validators;
 
-namespace DynamicEndpoints.Sample;
+namespace DynamicEndpoints.Samples.Showcase;
 
 /// <summary>
 /// Endpoints created on first start, so the panel is not empty. Shows the fluent builder API.

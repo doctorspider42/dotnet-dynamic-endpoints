@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using DynamicEndpoints.Sample.Processors;
+using DynamicEndpoints.Samples.Showcase.Processors;
 
-namespace DynamicEndpoints.Sample.Greetings;
+namespace DynamicEndpoints.Samples.Showcase.Greetings;
 
 public sealed record GreetingRequest(string Slug, string Greeting);
 

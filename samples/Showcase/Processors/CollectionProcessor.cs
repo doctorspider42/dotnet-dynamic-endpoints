@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
-using DynamicEndpoints.Sample.Data;
+using DynamicEndpoints.Samples.Showcase.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace DynamicEndpoints.Sample.Processors;
+namespace DynamicEndpoints.Samples.Showcase.Processors;
 
 public enum CollectionAction
 {

@@ -37,7 +37,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - **.NET Aspire sample.** `samples/DynamicEndpoints.AppHost` runs the sample in two replicas on PostgreSQL with Redis change
   notifications, and `samples/DynamicEndpoints.ServiceDefaults` sends the per-endpoint metrics and traces to the Aspire dashboard.
   The sample picks PostgreSQL and Redis up from the `dynamicendpoints` and `redis` connection strings.
-- **Container for a live demo.** `samples/DynamicEndpoints.Sample/Dockerfile` and `samples/docker-compose.yml` (two instances,
+- **Container for a live demo.** `samples/Showcase/Dockerfile` and `samples/docker-compose.yml` (two instances,
   PostgreSQL, Redis, nginx). A demo mode (`Demo__Enabled`) adds a rate limit per client and resets the endpoints every hour.
 - **Request snippets.** `GET /{id}/snippets` of the admin API (and `POST /snippets` for an unsaved definition) returns an example
   request built from parameter examples, defaults, allowed values and constraints, plus ready-made curl, HTTPie and C# `HttpClient`

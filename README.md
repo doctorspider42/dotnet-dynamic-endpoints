@@ -231,7 +231,7 @@ three runs), allocations were stable. Run them yourself with
 ## 🧪 Sample app
 
 ```bash
-dotnet run --project samples/DynamicEndpoints.Sample
+dotnet run --project samples/Showcase
 ```
 
 - 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the `DynamicEndpoints.AdminUI` package. Editor with processor forms,
@@ -293,7 +293,7 @@ src/DynamicEndpoints.Yaml                  YAML text format
 src/DynamicEndpoints.Cli                   dynamic-endpoints .NET tool
 src/DynamicEndpoints.Testing               test helpers
 src/DynamicEndpoints.Templates             dotnet new project template
-samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite (or PostgreSQL), Dockerfile
+samples/Showcase                           showcase: admin panel, Swagger UI, SQLite (or PostgreSQL), Dockerfile
 samples/DynamicEndpoints.AppHost           .NET Aspire: the sample ×2 with PostgreSQL, Redis and the dashboard
 samples/DynamicEndpoints.ServiceDefaults   Aspire service defaults incl. the dynamic endpoint metrics
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)

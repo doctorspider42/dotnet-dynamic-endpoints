@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace DynamicEndpoints.Sample.Processors;
+namespace DynamicEndpoints.Samples.Showcase.Processors;
 
 public enum CalculatorOperation
 {

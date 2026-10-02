@@ -28,7 +28,7 @@
     <ProjectReference Include="..\..\src\DynamicEndpoints.AdminUI\DynamicEndpoints.AdminUI.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.Cli\DynamicEndpoints.Cli.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.EntityFrameworkCore\DynamicEndpoints.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\samples\DynamicEndpoints.Sample\DynamicEndpoints.Sample.csproj" />
+    <ProjectReference Include="..\..\samples\Showcase\DynamicEndpoints.Samples.Showcase.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.FluentValidation\DynamicEndpoints.FluentValidation.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.OpenTelemetry\DynamicEndpoints.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.PostgreSql\DynamicEndpoints.PostgreSql.csproj" />

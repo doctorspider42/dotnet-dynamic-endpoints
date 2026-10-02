@@ -1,9 +1,9 @@
-# The sample as it would run for a live demo: two instances behind one port, PostgreSQL for the definitions and Redis for
-# instant propagation of changes. Nothing here deploys anything – it runs on your machine:
+# The showcase app (samples/Showcase) as it would run for a live demo: two instances behind one port, PostgreSQL for the
+# definitions and Redis for instant propagation of changes. Nothing here deploys anything – it runs on your machine:
 #
 #   docker compose -f samples/docker-compose.yml up --build        → http://localhost:8080/admin/
 #
-# For a hosted demo, use the same image (samples/DynamicEndpoints.Sample/Dockerfile) with a managed PostgreSQL and Redis,
+# For a hosted demo, use the same image (samples/Showcase/Dockerfile) with a managed PostgreSQL and Redis,
 # and point OTEL_EXPORTER_OTLP_ENDPOINT at your collector to get the dynamic_endpoints.* metrics and traces.
 
 name: dynamic-endpoints-demo
@@ -12,7 +12,7 @@ services:
   sample:
     build:
       context: ..
-      dockerfile: samples/DynamicEndpoints.Sample/Dockerfile
+      dockerfile: samples/Showcase/Dockerfile
     environment:
       ConnectionStrings__dynamicendpoints: "Host=postgres;Database=dynamicendpoints;Username=postgres;Password=postgres"
       ConnectionStrings__redis: "redis:6379"

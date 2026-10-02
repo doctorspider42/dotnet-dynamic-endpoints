@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DynamicEndpoints.Sample\DynamicEndpoints.Sample.csproj" />
+    <ProjectReference Include="..\Showcase\DynamicEndpoints.Samples.Showcase.csproj" />
   </ItemGroup>
 
 </Project>

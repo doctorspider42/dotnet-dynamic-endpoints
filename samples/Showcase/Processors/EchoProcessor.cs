@@ -1,4 +1,4 @@
-namespace DynamicEndpoints.Sample.Processors;
+namespace DynamicEndpoints.Samples.Showcase.Processors;
 
 [DynamicProcessor("echo", Description = "Returns the validated, normalized parameters – handy for testing definitions.")]
 public sealed class EchoProcessor(TimeProvider timeProvider) : IDynamicEndpointProcessor

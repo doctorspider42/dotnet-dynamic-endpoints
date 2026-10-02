@@ -1,7 +1,7 @@
 using DynamicEndpoints.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace DynamicEndpoints.Sample.Data;
+namespace DynamicEndpoints.Samples.Showcase.Data;
 
 /// <summary>Demo only – a real application uses migrations (<c>dotnet ef migrations add …</c>).</summary>
 internal static class SampleDatabase

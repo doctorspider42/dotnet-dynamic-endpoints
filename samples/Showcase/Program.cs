@@ -1,9 +1,9 @@
 using DynamicEndpoints;
 using DynamicEndpoints.EntityFrameworkCore;
-using DynamicEndpoints.Sample;
-using DynamicEndpoints.Sample.Data;
-using DynamicEndpoints.Sample.Demo;
-using DynamicEndpoints.Sample.Greetings;
+using DynamicEndpoints.Samples.Showcase;
+using DynamicEndpoints.Samples.Showcase.Data;
+using DynamicEndpoints.Samples.Showcase.Demo;
+using DynamicEndpoints.Samples.Showcase.Greetings;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

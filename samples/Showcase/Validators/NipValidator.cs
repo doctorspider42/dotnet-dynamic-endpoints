@@ -1,4 +1,4 @@
-namespace DynamicEndpoints.Sample.Validators;
+namespace DynamicEndpoints.Samples.Showcase.Validators;
 
 /// <summary>Polish tax identification number (NIP) – 10 digits with a weighted checksum. Dashes and spaces are ignored.</summary>
 [DynamicValidator("nip", Description = "Polish tax id (NIP) with checksum.", Targets = DynamicValidatorTargets.Parameter, ParameterTypes = [ParameterType.String])]

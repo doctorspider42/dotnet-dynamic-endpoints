@@ -3,7 +3,7 @@
 ## The sample
 
 ```bash
-dotnet run --project samples/DynamicEndpoints.Sample
+dotnet run --project samples/Showcase
 ```
 
 - 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the [`DynamicEndpoints.AdminUI`](admin-ui.md) package. Editor with
@@ -51,8 +51,8 @@ binding, validation and processor spans.
 ## …as a container (live demo)
 
 ```bash
-docker build -f samples/DynamicEndpoints.Sample/Dockerfile -t dynamic-endpoints-sample .
-docker run --rm -p 8080:8080 dynamic-endpoints-sample                # SQLite in /data
+docker build -f samples/Showcase/Dockerfile -t dynamic-endpoints-showcase .
+docker run --rm -p 8080:8080 dynamic-endpoints-showcase               # SQLite in /data
 docker compose -f samples/docker-compose.yml up --build              # 2 instances + PostgreSQL + Redis + nginx
 ```
 

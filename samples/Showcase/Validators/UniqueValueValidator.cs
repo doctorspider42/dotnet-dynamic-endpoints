@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
-using DynamicEndpoints.Sample.Data;
+using DynamicEndpoints.Samples.Showcase.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace DynamicEndpoints.Sample.Validators;
+namespace DynamicEndpoints.Samples.Showcase.Validators;
 
 public sealed class UniqueValueConfig
 {

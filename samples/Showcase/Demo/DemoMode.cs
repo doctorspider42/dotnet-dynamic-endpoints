@@ -1,9 +1,9 @@
 using System.Threading.RateLimiting;
-using DynamicEndpoints.Sample.Data;
+using DynamicEndpoints.Samples.Showcase.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace DynamicEndpoints.Sample.Demo;
+namespace DynamicEndpoints.Samples.Showcase.Demo;
 
 /// <summary>Settings of a public live demo (section <c>Demo</c>, e.g. <c>Demo__Enabled=true</c> in the container).</summary>
 public sealed class DemoOptions

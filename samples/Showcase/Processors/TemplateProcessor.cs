@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace DynamicEndpoints.Sample.Processors;
+namespace DynamicEndpoints.Samples.Showcase.Processors;
 
 public sealed class TemplateConfig
 {

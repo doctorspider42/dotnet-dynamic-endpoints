@@ -1,4 +1,4 @@
-namespace DynamicEndpoints.Sample.Greetings;
+namespace DynamicEndpoints.Samples.Showcase.Greetings;
 
 /// <summary>
 /// A purpose-built management API (instead of / next to <c>MapDynamicEndpointsAdmin</c>):

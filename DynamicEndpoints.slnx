@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/DynamicEndpoints.AppHost/DynamicEndpoints.AppHost.csproj" />
-    <Project Path="samples/DynamicEndpoints.Sample/DynamicEndpoints.Sample.csproj" />
+    <Project Path="samples/Showcase/DynamicEndpoints.Samples.Showcase.csproj" />
     <Project Path="samples/DynamicEndpoints.ServiceDefaults/DynamicEndpoints.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/src/">

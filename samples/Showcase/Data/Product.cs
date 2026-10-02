@@ -1,6 +1,6 @@
 using DynamicEndpoints.EntityFrameworkCore;
 
-namespace DynamicEndpoints.Sample.Data;
+namespace DynamicEndpoints.Samples.Showcase.Data;
 
 /// <summary>
 /// A product of a tenant's shop, exposed to admins through the <c>ef-crud</c> processor (see Program.cs): they can build list, get,

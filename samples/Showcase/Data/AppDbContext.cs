@@ -1,7 +1,7 @@
 using DynamicEndpoints.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace DynamicEndpoints.Sample.Data;
+namespace DynamicEndpoints.Samples.Showcase.Data;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {

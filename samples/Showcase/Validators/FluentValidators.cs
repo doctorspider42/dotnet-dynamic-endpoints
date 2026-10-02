@@ -1,7 +1,7 @@
 using System.Numerics;
 using FluentValidation;
 
-namespace DynamicEndpoints.Sample.Validators;
+namespace DynamicEndpoints.Samples.Showcase.Validators;
 
 /// <summary>
 /// Plain DTO for FluentValidation. The bound parameters of an endpoint are deserialized into it,
