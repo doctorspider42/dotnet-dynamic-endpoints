@@ -49,13 +49,16 @@ var app = builder.Build();
 // Demo only – use migrations in a real application.
 await SampleDatabase.EnsureCreatedAsync(app.Services);
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
 app.MapGet("/", () => Results.Redirect("/admin/")).ExcludeFromDescription();
 
 app.MapDynamicEndpoints();
 app.MapDynamicEndpointsAdmin("/api/admin/endpoints"); // generic admin API – .RequireAuthorization("admin") in real life
+app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints", o =>  // the panel (DynamicEndpoints.AdminUI)
+{
+    o.Title = "Dynamic Endpoints";
+    o.SwaggerUrl = "/swagger";
+    o.OpenApiUrl = "/openapi/dynamic.json";
+});
 app.MapGreetingsApi();                                  // purpose-built API using the injected manager
 app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");
 app.MapOpenApi("/openapi/{documentName}.json");

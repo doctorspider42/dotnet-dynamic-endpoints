@@ -27,6 +27,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - `IDynamicEndpointRevisionStore`: the optional store capability behind it, implemented by the in-memory store (and so by
   `DynamicEndpoints.Testing`) and the EF Core store. The bundled `DynamicEndpointsDbContext` gets the migration
   `DynamicEndpointRevisionsAndDrafts` (provider-independent, adopted for databases created with `EnsureCreated`).
+- **Admin panel as a package.** `DynamicEndpoints.AdminUI` serves the panel from embedded files:
+  `app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints")` returns a `RouteGroupBuilder`, so
+  `.RequireAuthorization()` works. It reserves its prefix, follows the path base and takes a title and Swagger / OpenAPI links.
+  Besides the list and the editor, it has drafts with scheduled publishing, history with diffs and rollback, and the "Try"
+  console generates example values from the parameters (examples, defaults, allowed values, formats, lengths, ranges, JSON
+  Schemas) and copies requests as curl, HTTPie or C# `HttpClient` code. The sample uses the package instead of its own `wwwroot`.
 - `DynamicEndpoints.OpenTelemetry` package: `AddDynamicEndpointsInstrumentation()` for `MeterProviderBuilder` and `TracerProviderBuilder`.
 
 ### Changed

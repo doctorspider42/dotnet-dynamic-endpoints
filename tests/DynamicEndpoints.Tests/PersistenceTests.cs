@@ -120,6 +120,7 @@ public sealed class PersistenceTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/greetings/pirate/Jack")).StatusCode);
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/openapi/dynamic.json")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/admin/")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/admin/index.html")).StatusCode);
     }
 

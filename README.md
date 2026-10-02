@@ -71,6 +71,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 🧪 **Test kit** | In-memory store for `WebApplicationFactory` and a ready-made test server. No database needed. |
 | 🪄 **Assembly scanning** | `AddFromAssemblyContaining<Program>()` registers every processor, validator and seeder in one call. |
 | 🖥️ **Admin REST API** | One line, `MapDynamicEndpointsAdmin()`, or build your own on top of `IDynamicEndpointManager`. |
+| 🎛️ **Admin panel** | `MapDynamicEndpointsAdminUI()`: editor, drafts, history with diffs and rollback, and a "Try" console that writes curl, HTTPie and C# for you. |
 | ✅ **Tested** | Integration tests run on TestServer + SQLite, and on real PostgreSQL and Redis containers: persistence, migrations, multiple instances, concurrency. |
 
 ## 🚀 Quick start
@@ -79,6 +80,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 dotnet add package DynamicEndpoints
 dotnet add package DynamicEndpoints.EntityFrameworkCore   # persistence
 dotnet add package DynamicEndpoints.FluentValidation      # optional
+dotnet add package DynamicEndpoints.AdminUI               # optional: the admin panel
 ```
 
 ```csharp
@@ -95,6 +97,8 @@ var app = builder.Build();
 
 app.MapDynamicEndpoints();                                         // 🔥 the dynamic routes
 app.MapDynamicEndpointsAdmin("/api/admin/endpoints")               // 🖥️ management API
+   .RequireAuthorization("admin");
+app.MapDynamicEndpointsAdminUI("/admin", "/api/admin/endpoints")   // 🎛️ admin panel (DynamicEndpoints.AdminUI)
    .RequireAuthorization("admin");
 app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");           // 📜 OpenAPI 3.1
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/openapi/dynamic.json", "Dynamic API"));
@@ -367,6 +371,29 @@ await changes.ApplyAsync(ct);                                       // routing t
 | `POST` | `/{id}/revisions/{revision}/rollback` | roll back |
 
 It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
+</details>
+
+<details>
+<summary><b>Admin panel: <code>MapDynamicEndpointsAdminUI()</code></b></summary>
+
+The `DynamicEndpoints.AdminUI` package serves the panel from embedded files, with no static files middleware and no dependencies:
+
+```csharp
+app.MapDynamicEndpointsAdmin("/api/admin/endpoints").RequireAuthorization("admin");
+app.MapDynamicEndpointsAdminUI("/admin", adminApiPath: "/api/admin/endpoints", o =>
+{
+    o.Title = "Orders API – endpoints";
+    o.SwaggerUrl = "/swagger";
+    o.OpenApiUrl = "/openapi/dynamic.json";
+}).RequireAuthorization("admin");
+```
+
+- **List & editor:** everything a definition has, with *Validate*, *Save draft* (with an optional publish time and comment) and *Save & publish*.
+- **History:** revisions with kind and comment, diffs against the previous or the published revision, one-click rollback.
+- **Try console:** example values generated from the parameters' examples, defaults, allowed values, formats, lengths, ranges and
+  JSON Schemas, plus *Copy as curl / HTTPie / C# HttpClient*.
+- Returns a `RouteGroupBuilder`, so `.RequireAuthorization()` works. The prefix is reserved and path bases are respected.
+  The panel holds no data, so secure the admin API in any case.
 </details>
 
 <details>
@@ -721,6 +748,7 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | Package | What |
 |---|---|
 | `DynamicEndpoints` | core: routing, binding, validation engines, manager, admin API, OpenAPI. **Zero third-party dependencies** |
+| `DynamicEndpoints.AdminUI` | the admin panel, `MapDynamicEndpointsAdminUI()` |
 | `DynamicEndpoints.EntityFrameworkCore` | persistence with EF Core |
 | `DynamicEndpoints.FluentValidation` | FluentValidation validators as dynamic validators |
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
@@ -734,7 +762,9 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 dotnet run --project samples/DynamicEndpoints.Sample
 ```
 
-- 🖥️ **Admin panel:** `http://localhost:5118/admin/`. List, editor (parameters, constraints, rules, validators, processor config) and a built-in "Try" console.
+- 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the `DynamicEndpoints.AdminUI` package. List, editor (parameters, constraints, rules,
+  validators, processor config), drafts and scheduled publishing, history with diffs and rollback, and a "Try" console with
+  generated examples and curl / HTTPie / C# snippets.
 - 📜 **Swagger UI:** `http://localhost:5118/swagger`, with the *Dynamic endpoints* and *Admin API* documents.
 - 🧩 **Processors:** `echo`, `template`, `calculator`, `collection` (a JSON document store in SQLite) and an inline `clock`.
 - 🛡️ **Validators:** `nip` (C#), `unique-value` (C#, DB lookup), `iban` and `booking-request` (FluentValidation). `POST /contacts` shows the built-in formats.
@@ -767,6 +797,7 @@ dotnet test DynamicEndpoints.slnx
 
 ```
 src/DynamicEndpoints                       core library
+src/DynamicEndpoints.AdminUI               admin panel (embedded HTML/JS)
 src/DynamicEndpoints.EntityFrameworkCore   EF Core store
 src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
@@ -791,7 +822,7 @@ Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainer
 - [x] Draft → publish workflow with version history, diffs, rollback and scheduled publishing
 - [x] Instant change propagation: PostgreSQL `LISTEN/NOTIFY` and Redis pub/sub
 - [x] Change events, transactional change sets, EF Core migrations, test kit
-- [ ] Admin UI as a reusable package
+- [x] Admin UI as a reusable package
 - [x] OpenTelemetry metrics and tracing per dynamic endpoint
 
 ## ⚖️ License
@@ -801,6 +832,7 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | Package | Depends on |
 |---|---|
 | `DynamicEndpoints` | ASP.NET Core shared framework only |
+| `DynamicEndpoints.AdminUI` | ASP.NET Core shared framework only |
 | `DynamicEndpoints.EntityFrameworkCore` | `Microsoft.EntityFrameworkCore.Relational` (MIT) |
 | `DynamicEndpoints.FluentValidation` | [FluentValidation](https://github.com/FluentValidation/FluentValidation) (Apache-2.0) |
 | `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
