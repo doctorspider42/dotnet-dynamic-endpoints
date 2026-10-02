@@ -18,8 +18,10 @@ public sealed class DynamicRequest
         JsonObject parameters,
         IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> files,
         HttpContext httpContext,
-        DynamicRequestItems items)
+        DynamicRequestItems items,
+        string? tenant = null)
     {
+        Tenant = tenant;
         _endpoint = endpoint;
         _items = items;
         _files = files;
@@ -31,6 +33,11 @@ public sealed class DynamicRequest
     public DynamicEndpointDefinition Endpoint => _endpoint.Definition;
 
     public string ProcessorName => _endpoint.ProcessorName;
+
+    /// <summary>
+    /// Tenant of the request (multi-tenancy): the endpoint's own tenant, or for shared endpoints the tenant the request was resolved to.
+    /// </summary>
+    public string? Tenant { get; }
 
     /// <summary>The endpoint being served – same object as the routed endpoint's metadata.</summary>
     public DynamicEndpointMetadata Metadata => _endpoint.Metadata;

@@ -485,3 +485,7 @@ $RECYCLE.BIN/
 *.db
 *.db-shm
 *.db-wal
+
+# docfx output (docs/docfx.json)
+docs/_site/
+docs/api/

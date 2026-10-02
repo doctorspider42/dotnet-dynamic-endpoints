@@ -1,0 +1,60 @@
+- name: Getting started
+  href: getting-started.md
+- name: How it works
+  href: how-it-works.md
+- name: Project template
+  href: project-template.md
+- name: Defining endpoints
+  items:
+    - name: Definition model
+      href: definition-model.md
+    - name: Validation
+      href: validation.md
+    - name: Processors, validators & seeders
+      href: processors-and-validators.md
+    - name: File uploads & forms
+      href: file-uploads.md
+    - name: Handing work on
+      href: handing-work-on.md
+- name: Managing endpoints
+  items:
+    - name: IDynamicEndpointManager
+      href: managing-endpoints.md
+    - name: Change sets (your transaction)
+      href: change-sets.md
+    - name: Admin REST API
+      href: admin-api.md
+    - name: Change events
+      href: change-events.md
+    - name: Audit log
+      href: audit-log.md
+    - name: Multi-tenancy
+      href: multi-tenancy.md
+- name: Requests & responses
+  items:
+    - name: Filters
+      href: filters.md
+    - name: One error format
+      href: error-responses.md
+    - name: Localized error messages
+      href: localization.md
+    - name: OpenAPI
+      href: openapi.md
+- name: Hosting
+  items:
+    - name: Options
+      href: options.md
+    - name: Multiple instances
+      href: multiple-instances.md
+    - name: EF Core & migrations
+      href: ef-core.md
+    - name: Testing
+      href: testing.md
+    - name: Analyzers
+      href: analyzers.md
+    - name: Benchmarks
+      href: benchmarks.md
+- name: Security
+  href: security.md
+- name: Limitations
+  href: limitations.md

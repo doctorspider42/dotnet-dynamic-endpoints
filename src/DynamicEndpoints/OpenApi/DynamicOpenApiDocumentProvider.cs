@@ -9,7 +9,14 @@ namespace DynamicEndpoints;
 /// <summary>Produces an OpenAPI 3.1 document describing the currently active dynamic endpoints.</summary>
 public interface IDynamicOpenApiDocumentProvider
 {
+    /// <summary>The document of all active endpoints; with multi-tenancy, of the shared endpoints only.</summary>
     JsonObject GetDocument();
+
+    /// <summary>
+    /// The document a tenant sees: the shared endpoints plus the endpoints of <paramref name="tenant"/>, with the tenant filled into
+    /// the tenant route prefix. Without multi-tenancy the same as <see cref="GetDocument()"/>.
+    /// </summary>
+    JsonObject GetDocument(string? tenant) => GetDocument();
 }
 
 internal sealed class DynamicOpenApiDocumentProvider(
@@ -19,31 +26,45 @@ internal sealed class DynamicOpenApiDocumentProvider(
     private const string ValidationProblemRef = "#/components/schemas/HttpValidationProblemDetails";
     private const string ProblemRef = "#/components/schemas/ProblemDetails";
 
-    public JsonObject GetDocument()
+    public JsonObject GetDocument() => GetDocument(null);
+
+    public JsonObject GetDocument(string? tenant)
     {
         var openApi = options.Value.OpenApi;
+        var tenancy = options.Value.Tenancy;
         var paths = new JsonObject();
         var operationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // A tenant sees its own endpoints and the shared ones. Endpoints of different tenants may share a path, so there's no
+        // document of everything with multi-tenancy.
+        var tenantParameter = tenancy is { Enabled: true, RoutePrefix: not null } ? tenancy.RouteParameter : null;
         var endpoints = runtime.ActiveEndpoints()
+            .Where(e => !tenancy.Enabled || e.Definition.Tenant is null || DynamicEndpointsTenancyOptions.SameTenant(e.Definition.Tenant, tenant))
             .OrderBy(e => e.Definition.Route, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.Definition.Method, StringComparer.Ordinal);
 
         foreach (var endpoint in endpoints)
         {
-            var path = RouteKeys.ToOpenApiPath(endpoint.RoutePattern);
+            var path = tenantParameter is not null && tenant is not null
+                ? RouteKeys.ToOpenApiPath(endpoint.RoutePattern, tenantParameter, Uri.EscapeDataString(tenant))
+                : RouteKeys.ToOpenApiPath(endpoint.RoutePattern);
             if (paths[path] is not JsonObject pathItem)
             {
                 paths[path] = pathItem = new JsonObject();
             }
 
-            pathItem[endpoint.Definition.Method.ToLowerInvariant()] = BuildOperation(endpoint, openApi, operationIds);
+            pathItem[endpoint.Definition.Method.ToLowerInvariant()] = BuildOperation(endpoint, openApi, operationIds, tenantParameter, tenantFilledIn: tenant is not null);
         }
 
         var info = new JsonObject { ["title"] = openApi.Title, ["version"] = openApi.Version };
         if (openApi.Description is not null)
         {
             info["description"] = openApi.Description;
+        }
+
+        if (tenancy.Enabled && tenant is not null)
+        {
+            info["x-tenant"] = tenant;
         }
 
         var components = new JsonObject
@@ -81,7 +102,12 @@ internal sealed class DynamicOpenApiDocumentProvider(
         return document;
     }
 
-    private static JsonObject BuildOperation(CompiledEndpoint endpoint, DynamicEndpointsOpenApiOptions openApi, HashSet<string> operationIds)
+    private static JsonObject BuildOperation(
+        CompiledEndpoint endpoint,
+        DynamicEndpointsOpenApiOptions openApi,
+        HashSet<string> operationIds,
+        string? tenantParameter,
+        bool tenantFilledIn)
     {
         var d = endpoint.Definition;
         var operation = new JsonObject
@@ -99,7 +125,23 @@ internal sealed class DynamicOpenApiDocumentProvider(
         }
 
         var parameters = new JsonArray();
-        foreach (var p in d.Parameters.Where(p => p.Source is not (ParameterSource.Body or ParameterSource.Form)))
+        bool IsTenantParameter(ParameterDefinition p) => tenantParameter is not null && p.Source == ParameterSource.Route &&
+            string.Equals(p.EffectiveSourceName, tenantParameter, StringComparison.OrdinalIgnoreCase);
+
+        if (tenantParameter is not null && !tenantFilledIn && !d.Parameters.Any(IsTenantParameter))
+        {
+            // The tenant route prefix of a document without a tenant: /tenants/{tenant}/orders.
+            parameters.Add(new JsonObject
+            {
+                ["name"] = tenantParameter,
+                ["in"] = "path",
+                ["required"] = true,
+                ["description"] = "Tenant.",
+                ["schema"] = new JsonObject { ["type"] = "string" },
+            });
+        }
+
+        foreach (var p in d.Parameters.Where(p => p.Source is not (ParameterSource.Body or ParameterSource.Form) && !(tenantFilledIn && IsTenantParameter(p))))
         {
             var parameter = new JsonObject
             {

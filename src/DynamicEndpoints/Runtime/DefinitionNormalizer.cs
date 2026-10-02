@@ -35,6 +35,7 @@ internal static class DefinitionNormalizer
                 }
                 : null,
             RateLimit = d.RateLimit is { } rateLimit ? rateLimit with { PartitionHeader = Clean(rateLimit.PartitionHeader) } : null,
+            Tenant = Clean(d.Tenant),
             Parameters = (d.Parameters ?? []).Select(p => p with
             {
                 Name = (p.Name ?? string.Empty).Trim(),

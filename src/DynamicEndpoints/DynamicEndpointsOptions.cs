@@ -68,6 +68,9 @@ public sealed class DynamicEndpointsOptions
     public DynamicValidationMessages Messages { get; } = new();
 
     public DynamicEndpointsOpenApiOptions OpenApi { get; } = new();
+
+    /// <summary>Multi-tenancy – switched on by <c>UseMultiTenancy()</c>.</summary>
+    public DynamicEndpointsTenancyOptions Tenancy { get; } = new();
 }
 
 public sealed class DynamicEndpointsOpenApiOptions

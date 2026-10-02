@@ -29,6 +29,9 @@ internal sealed class DynamicEndpointTransfer(
 {
     private static readonly string[] StoreProperties = ["id", "revision", "createdAt", "updatedAt"];
 
+    /// <summary>The same transfer on the tenant's view of the manager: it exports, matches and syncs only that tenant's endpoints.</summary>
+    internal DynamicEndpointTransfer ForTenant(string? tenant) => new(manager.ForTenant(tenant), scopeFactory, logger);
+
     public async Task<DynamicEndpointExport> ExportAsync(IReadOnlyCollection<Guid>? ids = null, CancellationToken cancellationToken = default)
     {
         var definitions = (await manager.ListAsync(cancellationToken)).Select(s => s.Definition);

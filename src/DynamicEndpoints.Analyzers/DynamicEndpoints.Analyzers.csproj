@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Roslyn analyzers for the DynamicEndpoints fluent API. Not a package of its own: the DLL is packed into the
+    DynamicEndpoints package under analyzers/dotnet/cs (see DynamicEndpoints.csproj). It references no DynamicEndpoints
+    assembly and recognizes the library's types by their metadata names.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- The compiler loads analyzers from its own folder; nothing else needs to be copied. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DynamicEndpoints.Analyzers.Tests" />
+  </ItemGroup>
+
+</Project>

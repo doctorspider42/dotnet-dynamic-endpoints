@@ -1,0 +1,75 @@
+# Getting started
+
+```bash
+dotnet add package DynamicEndpoints
+dotnet add package DynamicEndpoints.EntityFrameworkCore   # persistence
+dotnet add package DynamicEndpoints.FluentValidation      # optional
+```
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite("Data Source=app.db"));
+
+builder.Services
+    .AddDynamicEndpoints()
+    .AddFromAssemblyContaining<Program>()          // all processors, validators & seeders
+    .UseEntityFrameworkStore<AppDbContext>();      // persistence
+
+var app = builder.Build();
+
+app.MapDynamicEndpoints();                                         // 🔥 the dynamic routes
+app.MapDynamicEndpointsAdmin("/api/admin/endpoints")               // 🖥️ management API
+   .RequireAuthorization("admin");
+app.MapDynamicEndpointsOpenApi("/openapi/dynamic.json");           // 📜 OpenAPI 3.1
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/openapi/dynamic.json", "Dynamic API"));
+
+app.Run();
+```
+
+Add the table to your context with `modelBuilder.ApplyDynamicEndpointsConfiguration();` and you're done.
+
+#### Your first endpoint, from code
+
+```csharp
+public sealed class OrdersSeeder(IDynamicEndpointManager manager) : IDynamicEndpointSeeder
+{
+    public async Task SeedAsync(CancellationToken ct)
+    {
+        if ((await manager.ListAsync(ct)).Count > 0) return;
+
+        await manager.CreateAsync(DynamicEndpoint.Post("/orders/{customerId}")
+            .Named("Create order")
+            .InGroup("Orders")
+            .HandledBy<OrderProcessor, OrderConfig>(new() { Queue = "incoming" })   // typed, no magic strings
+            .FromRoute("customerId", p => p.String().Pattern("^C[0-9]{3}$"))
+            .FromHeader("tenantId", p => p.BindFrom("X-Tenant-Id").Required())
+            .FromBody("quantity", p => p.Integer().Required().Range(1, 100))
+            .FromBody("deliveryDate", p => p.Date().Required())
+            .FromBody("contactEmail", p => p.Email().Required())
+            .FromBody("nip", p => p.ValidatedBy<NipValidator>())
+            .WithRule("""{ ">=": [{ "var": "quantity" }, 10] }""", "Wholesale orders only.", "quantity")
+            .ValidatedBy<CreditLimitValidator>(), ct);
+    }
+}
+```
+
+…or let an admin click the same thing together in a panel. 🖱️
+
+`HandledBy<T>()` and `ValidatedBy<T>()` resolve the name the same way registration does (the attribute, or the type name),
+so code and registration can't drift apart. String names (`HandledBy("orders")`) still work. That's what the panel stores.
+
+#### …and the code behind it
+
+```csharp
+[DynamicProcessor("orders", Description = "Puts orders on a queue")]
+public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderConfig>
+{
+    protected override async Task<IResult> ProcessAsync(DynamicRequest request, OrderConfig config)
+    {
+        // request.Parameters is already bound, converted and validated
+        await bus.Send(config.Queue, request.Parameters, request.RequestAborted);
+        return Results.Accepted();
+    }
+}
+```

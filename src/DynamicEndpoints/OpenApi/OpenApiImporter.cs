@@ -94,6 +94,9 @@ public interface IDynamicEndpointOpenApiImporter
 
 internal sealed class DynamicEndpointOpenApiImporter(IDynamicEndpointTransfer transfer) : IDynamicEndpointOpenApiImporter
 {
+    internal DynamicEndpointOpenApiImporter ForTenant(string? tenant) =>
+        transfer is DynamicEndpointTransfer t ? new(t.ForTenant(tenant)) : throw DynamicEndpointTenantExtensions.NotTenantAware(transfer);
+
     public OpenApiImportResult Convert(JsonNode document, OpenApiImportOptions? options = null)
     {
         var (operations, warnings) = OpenApiConverter.Convert(document, options ?? new OpenApiImportOptions());

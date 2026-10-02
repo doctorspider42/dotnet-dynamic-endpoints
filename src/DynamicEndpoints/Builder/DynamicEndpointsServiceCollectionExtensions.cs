@@ -4,6 +4,7 @@ using DynamicEndpoints.Hosting;
 using DynamicEndpoints.Management;
 using DynamicEndpoints.Processing;
 using DynamicEndpoints.Runtime;
+using DynamicEndpoints.Tenancy;
 using DynamicEndpoints.Validation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
@@ -52,6 +53,7 @@ public static class DynamicEndpointsServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDynamicEndpointsTextFormat, JsonDynamicEndpointsTextFormat>());
         services.TryAddSingleton<IDynamicEndpointStore, InMemoryDynamicEndpointStore>();
         services.TryAddSingleton<IDynamicErrorResponseFactory, DefaultDynamicErrorResponseFactory>();
+        services.TryAddSingleton<DynamicEndpointTenantResolution>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DynamicEndpointsHostedService>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IDynamicEndpointChangeHandler, OutputCacheEvictionHandler>());
 

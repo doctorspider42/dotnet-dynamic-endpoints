@@ -83,6 +83,41 @@ and the project uses [Semantic Versioning](https://semver.org/).
   optional long-term quota (hour/day/week/month). Built on ASP.NET Core rate limiting (`AddRateLimiter()` + `UseRateLimiter()`);
   counters start over when the limit settings change and survive reloads. Rejections are `429` with `Retry-After`, formatted by
   `IDynamicErrorResponseFactory` (new `DynamicErrorKind.TooManyRequests`, also used for empty 429 responses), and documented in OpenAPI.
+- **Multi-tenancy.** `UseMultiTenancy(t => t.FromHeader("X-Tenant-Id"))` lets endpoints belong to a tenant
+  (`DynamicEndpointDefinition.Tenant`; `null` is a shared endpoint for every tenant). Routing serves each request the endpoints of
+  its tenant plus the shared ones, so several tenants can use the same route; conflicts are checked per tenant.
+  - Resolvers: `FromHeader`, `FromHost` (`acme.example.com` → `acme`), `FromClaim` (authenticates during routing when needed),
+    `FromRoutePrefix("/tenants/{tenant}")` (every dynamic endpoint is routed under the prefix), or your own
+    `IDynamicEndpointTenantResolver`. The first match wins; `HttpContext.GetDynamicEndpointTenantAsync()` and `DynamicRequest.Tenant`
+    return the result.
+  - Isolation: `manager.ForTenant(tenant)` and `store.ForTenant(tenant)` see and change only that tenant's endpoints and assign new
+    ones to it, change sets included.
+  - Admin API: `GET /?tenant=acme` and `GET /tenants`; `MapDynamicEndpointsTenantAdmin("/admin/tenants/{tenant}/endpoints")` maps a
+    tenant's own admin API.
+  - OpenAPI: `IDynamicOpenApiDocumentProvider.GetDocument(tenant)`, and `MapDynamicEndpointsOpenApi("/openapi/{tenant}/dynamic.json")`
+    serves one document per tenant.
+  - The tenant is stored in the serialized definition, so existing databases need no migration.
+- **Audit log.** `AddAuditLog()` records every change made through this instance's manager (change events with origin `Local`, so
+  once per change): who (the user of the HTTP request), what, when, and a property-by-property diff
+  (`parameters[0].maxLength: 5 → 10`), optionally with the complete definitions before and after.
+  - Sinks: `ILogger` by default, `a.ToMemory()` (`InMemoryDynamicEndpointAuditLog`, for tests and development), your own
+    `IDynamicEndpointAuditSink` with `a.To<T>()`, and in `DynamicEndpoints.EntityFrameworkCore` `a.ToEntityFramework<TContext>()` – a
+    table in your own context, added with `modelBuilder.ApplyDynamicEndpointsAuditConfiguration()`. The bundled
+    `DynamicEndpointsDbContext` is unchanged.
+  - Queryable sinks (`IDynamicEndpointAuditLog`) are served by the admin API: `GET /audit?endpointId=&tenant=&user=&from=&to=&limit=`
+    and `GET /{id}/audit`. A tenant's admin API returns only its own entries.
+- **Roslyn analyzers**, shipped inside the `DynamicEndpoints` package (no extra dependency). `DE0001`–`DE0010` report at build time
+  what would otherwise only fail on save or at start-up: abstract processor/validator types in `HandledBy<T>()` / `ValidatedBy<T>()` /
+  `AddProcessor<T>()`, duplicate processor and validator names, a configuration of the wrong class for a typed processor or validator,
+  and invalid literal route templates, `Pattern(…)` regexes (including constructs `NonBacktracking` rejects) and `WithRule(…)` JsonLogic.
+- **Project template.** `dotnet new install DynamicEndpoints.Templates`, then `dotnet new dynamic-endpoints -n MyApi`, creates a
+  minimal API with DynamicEndpoints on EF Core SQLite: the admin API, the dynamic OpenAPI document with Swagger UI, a typed sample
+  processor and a seeder with demo endpoints. Options: `--DynamicEndpointsVersion` and `--no-swagger`.
+- **Documentation site** (docfx, with an API reference from the XML docs) at
+  https://doctorspider42.github.io/dotnet-dynamic-endpoints, built from `docs/` and published by `.github/workflows/docs.yml`.
+  The README is now a shorter landing page that links to it.
+- **Benchmarks** in `tests/DynamicEndpoints.Benchmarks` (BenchmarkDotNet): dynamic endpoints vs. equivalent minimal APIs, and the
+  cost of a routing table swap with 10, 100 and 1000 endpoints. Results are in the README.
 
 ### Changed
 
@@ -95,6 +130,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
   `DynamicEndpointState.Draft` carries the draft of an endpoint.
 - The admin API answers `501` when the store keeps no history and drafts.
 - `DynamicEndpoints.Testing`: scheduled publishing is off in the in-memory setup, so call `PublishDueAsync()` in tests.
+- The release workflow also skips pushes that only touch the benchmarks, the docs workflow or the tool manifest.
 
 ## [0.3.0] - 2026-10-02
 

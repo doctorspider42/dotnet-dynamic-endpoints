@@ -1,0 +1,9 @@
+bin/
+obj/
+*.user
+.vs/
+
+# SQLite database of the demo
+*.db
+*.db-shm
+*.db-wal

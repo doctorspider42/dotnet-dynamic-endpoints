@@ -52,7 +52,9 @@ var dynamicEndpoints = builder.Services
         var now = DateTimeOffset.UtcNow;
         return Results.Ok(new { timeZone = zone.Id, utc = now, local = TimeZoneInfo.ConvertTime(now, zone) });
     }, "Returns the current time in the 'timeZone' parameter (IANA or Windows id).")
-    .UseEntityFrameworkStore<AppDbContext>();
+    .UseEntityFrameworkStore<AppDbContext>()
+    // Who changed which endpoint and how – logged, and the latest entries at GET /api/admin/endpoints/audit.
+    .AddAuditLog(audit => audit.ToLogger().ToMemory());
 
 // Several instances: Redis tells the others about a change right away (polling above stays the fallback).
 if (builder.Configuration.GetConnectionString("redis") is { Length: > 0 } redis)
