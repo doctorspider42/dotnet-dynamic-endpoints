@@ -9,6 +9,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-02
+
 ### Added
 
 - **Metrics and tracing per dynamic endpoint**, with `System.Diagnostics` only (the core still has no dependencies). The meter
@@ -354,7 +356,8 @@ First public release.
 - `DynamicEndpoints.FluentValidation`: FluentValidation validators as request- or parameter-level validators.
 - Sample app with an admin panel, Swagger UI and SQLite, plus continuous delivery to NuGet through Trusted Publishing.
 
-[Unreleased]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/doctorspider42/dotnet-dynamic-endpoints/compare/v0.1.1...v0.1.2
