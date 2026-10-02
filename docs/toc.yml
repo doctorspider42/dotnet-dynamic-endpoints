@@ -1,0 +1,8 @@
+- name: Docs
+  href: articles/
+- name: API reference
+  href: api/
+- name: Changelog
+  href: https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md
+- name: GitHub
+  href: https://github.com/doctorspider42/dotnet-dynamic-endpoints

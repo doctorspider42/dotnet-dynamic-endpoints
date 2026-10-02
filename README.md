@@ -18,9 +18,8 @@
 
 [Quick start](#-quick-start) •
 [Features](#-features) •
-[How it works](#-how-it-works) •
-[Validation](#%EF%B8%8F-validation-four-layers-zero-recompiles) •
-[Docs](#-documentation) •
+[Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/) •
+[API reference](https://doctorspider42.github.io/dotnet-dynamic-endpoints/api/DynamicEndpoints.html) •
 [Changelog](CHANGELOG.md) •
 [Sample app](#-sample-app)
 
@@ -66,6 +65,10 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 🚦 **Safe by design** | No code execution, ReDoS-proof regexes, body and depth limits, reserved prefixes, conflict detection. |
 | 🌐 **Multi-instance** | Instant propagation through PostgreSQL `LISTEN/NOTIFY` or Redis pub/sub, with polling as the fallback. |
 | 📣 **Change events** | Created / updated / deleted handlers for audit logs and cache invalidation. |
+| 🏢 **Multi-tenancy** | Endpoints per tenant on the same routes, resolved from a header, host, claim or route prefix. Scoped manager, admin API and OpenAPI. |
+| 📝 **Audit log** | Who changed what and when, with a property-by-property diff. `ILogger`, in-memory or EF Core, queryable through the admin API. |
+| 🔍 **Analyzers** | Invalid routes, regexes, JsonLogic rules and processor types are reported at build time. |
+| 🧰 **Project template** | `dotnet new dynamic-endpoints`: EF Core SQLite, admin API, Swagger UI, a sample processor and seeder. |
 | 🧪 **Test kit** | In-memory store for `WebApplicationFactory` and a ready-made test server. No database needed. |
 | 🪄 **Assembly scanning** | `AddFromAssemblyContaining<Program>()` registers every processor, validator and seeder in one call. |
 | 🖥️ **Admin REST API** | One line, `MapDynamicEndpointsAdmin()`, or build your own on top of `IDynamicEndpointManager`. |
@@ -147,487 +150,27 @@ public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderCon
 }
 ```
 
-## 🧠 How it works
-
-```mermaid
-flowchart LR
-    A[HTTP request] --> B{Route match<br/><i>dynamic EndpointDataSource</i>}
-    B --> P[Filters: OnRequestAsync<br/><i>access checks</i>]
-    P --> C[Binding<br/>route · query · header · body · form]
-    C --> D[Type conversion]
-    D --> E[JSON Schema<br/>+ parameter validators]
-    E --> F[JsonLogic<br/>business rules]
-    F --> G[Request validators<br/><i>DB lookups etc.</i>]
-    G --> H[IDynamicEndpointProcessor<br/><b>your code</b>]
-    H --> I[IResult]
-    P -. short-circuit .-> Y[e.g. 403]
-    C -. 413 / 415 / bad body .-> X
-    E -. errors .-> X[Filters: OnValidationFailedAsync<br/>default: 400 ValidationProblemDetails]
-    F -. errors .-> X
-    G -. errors .-> X
-```
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant API as Admin API / your code
-    participant M as IDynamicEndpointManager
-    participant DB as Store (EF Core)
-    participant R as ASP.NET Core routing
-    Admin->>API: POST definition
-    API->>M: CreateAsync(definition)
-    M->>M: compile & validate (schema, regex, rules, processor, conflicts)
-    M->>DB: persist
-    M->>R: swap endpoint list + fire change token
-    R-->>Admin: endpoint is live ⚡
-```
-
-- **Routing.** A custom `EndpointDataSource` with a change token. Each change builds a complete new endpoint list and swaps it in with a single assignment.
-- **Compile once.** On save, a definition is validated as a whole and compiled: route pattern, schema, regexes, rules, processor and validator configs, validator ↔ parameter type compatibility. A broken definition never reaches the routing table.
-- **Built-in engines.** A JSON Schema 2020-12 subset (`type`, `properties`, `required`, `additionalProperties`, `items`, length/range/count limits, `enum`, `const`, `format`, `uniqueItems`, `multipleOf`) and a [JsonLogic](https://jsonlogic.com) evaluator with the reference JavaScript semantics. Unsupported schema keywords and unknown operators are **rejected on save**, never silently ignored.
-- **Conflicts.** Detected on save: `/orders/{id}` vs `/Orders/{orderId:int}`, clashes with the app's own endpoints, reserved prefixes.
-- **Persistence.** Searchable fields are columns, the full definition is JSON, so the model can grow without migrations. `Revision` is a DB concurrency token.
-
-## 🛡️ Validation: four layers, zero recompiles
-
-<img src="docs/images/try-validation.jpg" alt="Three validation errors from three different layers in one response" width="720">
-
-*One request, three layers: a JSON Schema range check (`amount`), a C# checksum validator (`nip`) and a FluentValidation validator (`iban`).*
-
-| Layer | Who defines it | Example | Runs |
-|---|---|---|---|
-| **Constraints** (JSON Schema) | admin | types, ranges, lengths, enums, formats (e-mail, URI, phone…), regex | always, all errors at once |
-| **Parameter validators** | developer (C# / FluentValidation), attached by admin | NIP, IBAN, PESEL checksums | together with constraints |
-| **Business rules** (JsonLogic) | admin | `checkOut > checkIn`, "single room = 1 guest" | when the above passed |
-| **Request validators** | developer, attached by admin | "title must be unique" (DB lookup), credit limits | last, only for otherwise valid requests |
-
-Errors come back as RFC 9457 `ValidationProblemDetails`, keyed by the names the client used (`X-Tenant-Id`, `address.city`, `tags[1]`).
-Each error also has a stable code (`required`, `minLength`, `format`, `fileSize`, …) for your own error format (see *Filters* below).
-A body that isn't valid JSON or valid UTF-8 is a `400`, never a `500`.
-
-<details>
-<summary><b>Custom C# validator</b></summary>
-
-```csharp
-[DynamicValidator("nip", Description = "Polish tax id with checksum", Targets = DynamicValidatorTargets.Parameter)]
-public sealed class NipValidator : IDynamicValidator
-{
-    public ValueTask ValidateAsync(DynamicValidationContext context)
-    {
-        if (!IsValidNip(context.GetValue<string>()))
-            context.AddError("Invalid NIP checksum.");
-        return ValueTask.CompletedTask;
-    }
-}
-```
-
-Need configuration? Derive from `DynamicValidator<TConfig>`: the config is deserialized strictly (typos are errors), checked with DataAnnotations on save and cached per endpoint version.
-</details>
-
-<details>
-<summary><b>FluentValidation</b> (separate package)</summary>
-
-```csharp
-public sealed record BookingRequest(DateOnly CheckIn, DateOnly CheckOut, int Guests, string RoomType);
-
-public sealed class BookingRequestValidator : AbstractValidator<BookingRequest>   // → "booking-request" (whole request)
-{
-    public BookingRequestValidator(TimeProvider time) =>
-        RuleFor(b => b.CheckOut).Must((b, o) => o.DayNumber - b.CheckIn.DayNumber <= 14).WithMessage("Max 14 nights.");
-}
-
-public sealed class IbanValidator : AbstractValidator<string> { /* … */ }        // → "iban" (single parameter)
-
-builder.Services.AddDynamicEndpoints().AddFluentValidatorsFromAssemblyContaining<Program>();
-```
-
-- **Request-level:** the bound parameters are deserialized into the model, and property paths map back to the request names.
-- **Parameter-level:** scalar validators (`AbstractValidator<string>`, `<decimal>`, …) validate a single parameter. The panel only offers them for compatible parameter types, and a mismatch is rejected on save.
-- **Context in custom rules:** `ctx.GetDynamicContext()` gives access to the endpoint, the `HttpContext` and the configuration.
-</details>
-
 ## 📚 Documentation
 
-<details open>
-<summary><b>Definition model</b></summary>
+The full documentation, with an API reference generated from the XML docs, is at
+**[doctorspider42.github.io/dotnet-dynamic-endpoints](https://doctorspider42.github.io/dotnet-dynamic-endpoints/)**.
 
-| Area | What admins can set |
+| | |
 |---|---|
-| Endpoint | method, route template (`/orders/{id}`), name, description, group (section in Swagger UI), enabled |
-| Parameters | source (`Route`, `Query`, `Header`, `Body`, `Form`), name in request, type (`String`, `Integer`, `Number`, `Boolean`, `Date`, `DateTime`, `Guid`, `Array`, `Object`, `File`), required, default, example |
-| Constraints | min/max length, minimum/maximum, regex pattern, allowed values, min/max items, custom JSON Schema for objects/arrays, max file size, allowed content types |
-| Formats | `Email`, `Uri`, `Phone` (E.164), `Ipv4`, `Ipv6`, `Time` for strings; `Date`, `DateTime`, `Guid` as types |
-| Rules | [JsonLogic](https://jsonlogic.com) conditions with an error message, an optional error code and a target parameter |
-| Custom validators | code validators attached to parameters or to the whole request, with optional configuration |
-| Processing | processor name and configuration (JSON) |
-| Security | allow anonymous, require authorization, authorization policy, rate limiting policy |
-| Docs | response schema, request and response examples (documentation only) |
-</details>
-
-<details>
-<summary><b>Managing endpoints: <code>IDynamicEndpointManager</code></b></summary>
-
-Every operation validates, persists and swaps the routing table atomically. Inject it anywhere:
-
-```csharp
-await manager.CreateAsync(definition);
-await manager.UpdateAsync(definition with { Route = "/v2/orders" });   // optimistic concurrency via Revision
-await manager.UpsertAsync(definition);                                 // create or replace by Id, no revision needed
-await manager.SetEnabledAsync(id, false);
-await manager.DeleteAsync(id);
-var check = await manager.ValidateAsync(definition);                   // dry run
-await manager.ReloadAsync();                                           // re-read the store
-```
-
-`UpsertAsync` is made for syncing definitions from your own model: it creates the endpoint, or replaces the stored one with the same
-`Id` whatever its revision. Nothing is written (and the revision stays) when the content didn't change.
-
-The sample's `Greetings/` folder shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.
-</details>
-
-<details>
-<summary><b>Saving endpoints in your own transaction: <code>BeginChanges</code></b></summary>
-
-When an endpoint belongs to a row of your own (a feature version, a tenant setting), save both atomically. A change set writes
-through the store you give it and touches the routing table only when you apply it, after your commit:
-
-```csharp
-var changes = manager.BeginChanges(db.GetDynamicEndpointStore());   // EF Core: tracked by your DbContext, not saved
-await changes.UpsertAsync(definition, ct);                          // validated and compiled right away
-db.FeatureVersions.Add(version);
-await db.SaveChangesAsync(ct);                                      // one SaveChanges, one transaction
-await changes.ApplyAsync(ct);                                       // routing table, change handlers, other instances
-```
-
-- **Rollback:** drop the change set. Nothing was routed, so there's nothing to undo.
-- **Concurrency:** a stale revision fails inside *your* `SaveChanges` with `DbUpdateConcurrencyException`.
-- **Explicit transactions:** `manager.BeginChanges(HttpContext.RequestServices)` uses the registered store with *your* scoped
-  DbContext, and its saves join `db.Database.BeginTransactionAsync()`. `db.GetDynamicEndpointStore(saveChanges: true)` does the same
-  for any context.
-- **Route conflicts** are checked across the whole change set too.
-</details>
-
-<details>
-<summary><b>Admin REST API: <code>MapDynamicEndpointsAdmin()</code></b></summary>
-
-| Method | Path | |
-|---|---|---|
-| `GET` | `/` | all definitions with runtime status (`Active`, `Disabled`, `Invalid`, `Pending`) |
-| `GET` | `/{id}` | single definition |
-| `POST` | `/` | create & publish |
-| `PUT` | `/{id}` | replace (requires matching `revision`) |
-| `DELETE` | `/{id}` | delete |
-| `POST` | `/{id}/enable` · `/{id}/disable` | toggle |
-| `POST` | `/validate` | dry run |
-| `POST` | `/reload` | re-read the store |
-| `GET` | `/processors` · `/validators` | building blocks for the UI |
-
-It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
-</details>
-
-<details>
-<summary><b>Processors, validators, seeders &amp; assembly scanning</b></summary>
-
-```csharp
-builder.Services.AddDynamicEndpoints()
-    .AddFromAssemblyContaining<Program>()                    // everything at once…
-    .AddProcessorsFromAssembly(typeof(Program).Assembly, t => t.Namespace != "Legacy")   // …or filtered
-    .AddProcessor<OrderProcessor>("orders-v2")               // explicit name (scanning then skips the type)
-    .AddProcessor("ping", r => Results.Ok("pong"))           // inline
-    .AddValidator("even", ctx => { /* … */ return ValueTask.CompletedTask; }, DynamicValidatorTargets.Parameter)
-    .AddSeeder<OrdersSeeder>();
-```
-
-- **Names:** come from `[DynamicProcessor("…")]` / `[DynamicValidator("…")]` or the type name (`OrderLookupProcessor` → `order-lookup`).
-- **Idempotent scanning:** a type that is already registered is skipped.
-- **Single entry point:** register one processor and set `options.DefaultProcessor`.
-</details>
-
-<details>
-<summary><b>File uploads &amp; forms</b></summary>
-
-`Form` parameters read `multipart/form-data` or `application/x-www-form-urlencoded` bodies. Text fields are converted like query
-parameters. Files are streamed by ASP.NET Core (to disk above a small threshold), so there is no base64 and no double buffering.
-
-```csharp
-DynamicEndpoint.Post("/documents")
-    .HandledBy<DocumentProcessor>()
-    .FromForm("title", p => p.Required().MaxLength(100))
-    .FromForm("document", p => p.File(maxSize: 10 * 1024 * 1024, "application/pdf", "image/*").Required())
-    .FromForm("attachments", p => p.Files(maxSize: 1024 * 1024).Items(0, 5));
-
-// in the processor (or a validator)
-var file = request.GetFile("document");                 // IFormFile
-await using var stream = file!.OpenReadStream();
-```
-
-- In `request.Parameters` (and in JsonLogic rules) a file is its metadata: `{ "fileName", "contentType", "length" }`.
-- `AllowedContentTypes` is checked against the `Content-Type` the client sent. Inspect the content when it matters.
-- An endpoint reads either a JSON body or a form, not both. The overall form size limit is `MaxFormBodySize` (30 MB).
-- OpenAPI documents the body as `multipart/form-data` with `format: binary` file fields, so Swagger UI shows a file picker.
-</details>
-
-<details>
-<summary><b>Filters: access checks, error format, metering</b></summary>
-
-```csharp
-builder.Services.AddDynamicEndpoints().AddFilter<TenantFeatureFilter>();   // scoped, run in registration order
-
-public sealed class TenantFeatureFilter(ITenantFeatures features, IMeter meter) : IDynamicEndpointFilter
-{
-    // After routing and authorization, before the body is read or validated.
-    public async ValueTask OnRequestAsync(DynamicEndpointRequestContext context)
-    {
-        if (!await features.HasAccessAsync(context.HttpContext, context.Endpoint.Definition.Group))
-            context.Result = Results.Problem(statusCode: 403, title: "Feature not available");   // short-circuits
-    }
-
-    // Validation errors (400), malformed or undecodable bodies (400), 413 and 415.
-    public ValueTask OnValidationFailedAsync(DynamicValidationFailedContext context)
-    {
-        meter.Rejected(context.Endpoint.Id, context.Reason);
-        context.Result = Results.Json(new
-        {
-            apiVersion = "1.0",
-            error = new { code = "VALIDATION_FAILED", message = context.Title,
-                          details = context.Errors.Select(e => new { e.Key, e.Code, e.Message }) },
-        }, statusCode: context.StatusCode);
-        return ValueTask.CompletedTask;
-    }
-}
-```
-
-Both methods are optional, and `AddFilter(onRequest: …, onValidationFailed: …)` registers one inline. `context.Result` starts
-with the default problem response, so a filter that only logs leaves it alone. Custom validators can report codes too:
-`context.AddError(path, message, code)`.
-
-The routed endpoint carries the complete definition, so your own middleware doesn't need the store either:
-`HttpContext.GetDynamicEndpoint()` gives `Definition`, `ProcessorName`, `Parameters`, `FindParameter`, `HasFiles` and friends.
-</details>
-
-<details>
-<summary><b>Handing work on: validators → processor</b></summary>
-
-A validator that already parsed a value, or loaded an entity, hands it on instead of letting the processor repeat the work:
-
-```csharp
-// in a parameter validator
-var document = Decode(context.GetValue<string>());
-context.SetParsedValue(document);               // for the validated parameter (or pass a parameter name)
-context.Items["customer"] = customer;           // anything else, shared by filters, validators and the processor
-
-// in the processor
-var document = request.GetParsedValue<Document>("document");
-var customer = (Customer)request.Items["customer"]!;
-```
-</details>
-
-<details>
-<summary><b>One error format: <code>IDynamicErrorResponseFactory</code></b></summary>
-
-One factory builds every error: validation errors, malformed bodies, 413 and 415. With the middleware it also covers empty 401/403
-responses from authentication and authorization, 404 for unknown routes, 405, empty errors returned by processors, and unhandled
-exceptions. So `UseStatusCodePages` isn't needed any more.
-
-```csharp
-builder.Services.AddDynamicEndpoints().UseErrorResponses(e => Results.Json(new
-{
-    apiVersion = "1.0",
-    error = new { code = e.Kind.ToString(), message = e.Title,                 // Validation, NotFound, Unauthorized, Exception, …
-                  details = e.Errors.Select(x => new { x.Key, x.Code, x.Message }) },
-    requestId = e.RequestId,                                                     // trace id
-}, statusCode: e.StatusCode));                                                   // or UseErrorResponseFactory<MyFactory>()
-
-app.UseDynamicEndpointsErrorResponses(o => o.AppliesTo = c => c.Request.Path.StartsWithSegments("/api"));   // early in the pipeline
-```
-
-- Responses that already have a body are left alone, and `[SkipStatusCodePages]` is respected.
-- Exceptions are logged and answered with a 500. `e.Exception` is there for you, but never in the default response. To let
-  `UseExceptionHandler` handle them instead, set `o.HandleExceptions = false`.
-- Titles are localized like the validation messages. `e.Endpoint` is the dynamic endpoint (`null` for unknown routes).
-- `IDynamicEndpointFilter.OnValidationFailedAsync` still runs afterwards and can replace the result of a single request.
-</details>
-
-<details>
-<summary><b>Localized error messages</b></summary>
-
-English and Polish are built in, with proper plural forms ("2 znaki", "5 znaków").
-
-```csharp
-builder.Services.AddDynamicEndpoints(o =>
-{
-    o.Messages.DefaultCulture = "pl";                                    // always Polish…
-    o.Messages.UseRequestCulture = true;                                 // …or per request (app.UseRequestLocalization())
-    o.Messages.Set("pl", "required.header", "Brak nagłówka {0}.");       // override a single text
-    o.Messages.Set("de", "minLength", "Mindestens {0} Zeichen.");        // add a language
-    o.Messages.Localizer = c => localizer[c.Key, c.Arguments.ToArray()]; // or route everything through IStringLocalizer
-});
-```
-
-Keys follow the error codes (`minLength`, `format.email`, `required.query`, `type.integer`, `file.maxSize`, …), and
-`DynamicValidationMessages.Keys` lists them all. Rule messages are whatever the admin wrote.
-</details>
-
-<details>
-<summary><b>OpenAPI: security schemes, common headers, examples, hooks</b></summary>
-
-```csharp
-builder.Services.AddDynamicEndpoints(o =>
-{
-    o.OpenApi.AddApiKey("X-Api-Key");                                    // securitySchemes + a requirement on every non-anonymous operation
-    o.OpenApi.AddSecurityScheme("Bearer", bearerScheme, appliesTo: d => d.Group == "partners");
-    o.OpenApi.AddHeader("X-End-User", "End user the call is made for.", required: true);
-    o.OpenApi.AddHeader("X-Seat-Id", "Seat of the end user.");
-    o.OpenApi.AddHeader("Idempotency-Key", "Makes retries safe.", appliesTo: d => d.Method != "GET",
-        schema: new JsonObject { ["type"] = "string", ["format"] = "uuid" }, example: "6f9619ff-8b86-d011-b42d-00cf4fc964ff");
-    o.OpenApi.ConfigureOperation = (operation, definition) => { /* x-extensions, extra responses */ };
-    o.OpenApi.ConfigureDocument = document => { /* servers, your error schema */ };
-});
-
-DynamicEndpoint.Post("/orders")
-    .FromBody("sku", p => p.Required().Example("A-1"))       // examples compose the request example…
-    .WithRequestExample(new { sku = "A-1", quantity = 2 })   // …or set it by hand
-    .WithResponseExample(new { id = 7, status = "accepted" });
-```
-
-- **Headers** are real header parameters of each operation, so client generators produce arguments for them.
-- **Security requirements** are attached to each operation. Endpoints with `AllowAnonymous` get none.
-- **Examples:** parameter examples show up on query, header and route parameters and in the request body example.
-</details>
-
-<details>
-<summary><b>Options</b></summary>
-
-```csharp
-builder.Services.AddDynamicEndpoints(o =>
-{
-    o.ReservedPrefixes.Add("/internal");          // never usable by dynamic endpoints
-    o.RequiredRoutePrefixes.Add("/api/v{version:int}");  // every route must start with /api/v1, /api/v2, …
-    o.DefaultProcessor = "orders";                // when a definition names none
-    o.MaxRequestBodySize = 1024 * 1024;           // JSON bodies, bytes
-    o.MaxFormBodySize = 30 * 1024 * 1024;         // form bodies with all their files, bytes
-    o.MaxJsonDepth = 32;
-    o.RefreshInterval = TimeSpan.FromSeconds(30); // multi-instance polling (the fallback when a change notifier is used)
-    o.InstanceId = "api-1";                       // identifies this instance in change notifications (unique by default)
-    o.ThrowOnStartupLoadFailure = true;
-    o.ConfigureEndpoint = (builder, definition) => { /* extra metadata */ };
-    o.OpenApi.Title = "My dynamic API";
-    o.OpenApi.DefaultGroup = "Dynamic";
-});
-
-app.MapDynamicEndpoints().RequireRateLimiting("api");   // conventions for all dynamic endpoints
-```
-</details>
-
-<details>
-<summary><b>Multiple instances</b></summary>
-
-Each instance keeps its own routing table. A change notifier tells the others right away, and polling catches whatever a
-notifier missed:
-
-```csharp
-builder.Services.AddDynamicEndpoints(o => o.RefreshInterval = TimeSpan.FromMinutes(5))   // fallback only
-    .UseEntityFrameworkStore<AppDbContext>()
-    .UsePostgreSqlChangeNotifications(connectionString);    // DynamicEndpoints.PostgreSql: LISTEN/NOTIFY, no extra infrastructure
- // .UseRedisChangeNotifications("redis:6379");             // DynamicEndpoints.Redis: pub/sub
- // .UseChangeNotifier<MyServiceBusNotifier>();             // or your own IDynamicEndpointChangeNotifier
-```
-
-- **Instant:** every change is published after it was applied. The other instances reload at once, and bursts are coalesced.
-- **Resilient:** listeners reconnect on their own and reload after every reconnect, in case something was missed while
-  disconnected. An instance ignores its own messages.
-- **Push by hand:** `IDynamicEndpointManager.ReloadAsync()` still works from any signal of yours.
-- **Visibility:** the admin list reports `Pending` for changes this instance hasn't picked up yet.
-- **Conflicting writes:** a stale write from another instance is rejected by the database concurrency token.
-</details>
-
-<details>
-<summary><b>Change events: audit, cache invalidation</b></summary>
-
-```csharp
-builder.Services.AddDynamicEndpoints()
-    .AddChangeHandler<AuditChangeHandler>()                   // scoped, run in registration order
-    .OnChanged((change, ct) => cache.RemoveAsync(change.Id.ToString(), ct));
-
-public sealed class AuditChangeHandler(AuditLog audit) : IDynamicEndpointChangeHandler
-{
-    public Task OnChangedAsync(DynamicEndpointChangedEvent change, CancellationToken ct) =>
-        change.Origin == DynamicEndpointChangeOrigin.Local     // once, on the instance that made the change
-            ? audit.WriteAsync(change.Kind, change.Id, change.Previous, change.Definition, ct)
-            : Task.CompletedTask;
-}
-```
-
-- `Kind` is `Created`, `Updated` (including enable/disable) or `Deleted`. `Previous` and `Definition` are the definitions before
-  and after the change.
-- `Origin` is `Local` for changes made through this instance's manager, raised once. It's `Remote` for changes picked up by a
-  reload, raised on every other instance, which is what per-instance caches need.
-- Handlers run after the routing table was updated. Exceptions are logged and don't undo the change.
-</details>
-
-<details>
-<summary><b>EF Core: migrations</b></summary>
-
-**Your own DbContext** (recommended): add the table to your model, and your migrations create and evolve it.
-
-```csharp
-protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-    modelBuilder.ApplyDynamicEndpointsConfiguration();   // or ApplyConfiguration(new DynamicEndpointRecordConfiguration(table, schema))
-```
-
-```bash
-dotnet ef migrations add AddDynamicEndpoints
-```
-
-**The bundled `DynamicEndpointsDbContext`** ships its own provider-independent migrations:
-
-```csharp
-builder.Services.AddDynamicEndpoints()
-    .UseEntityFrameworkStore(o => o.UseNpgsql(connectionString), migrateOnStartup: true);
-// or apply them in your deployment step: await db.Database.MigrateAsync();
-```
-
-A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`. With your own
-context, add the table to an empty initial migration the usual EF Core way. `MigrateOnStartup<TContext>()` applies your own
-context's migrations on start-up, and any `IDynamicEndpointStoreInitializer` runs before definitions are loaded.
-</details>
-
-<details>
-<summary><b>Testing: <code>DynamicEndpoints.Testing</code></b></summary>
-
-```csharp
-// Your application, without its database: in-memory store, no migrations, no notifier, no polling.
-await using var factory = new WebApplicationFactory<Program>()
-    .WithInMemoryDynamicEndpoints(b => b.AddProcessor("fake-crm", _ => Results.Ok(new { id = 1 })));
-await factory.AddDynamicEndpointAsync(DynamicEndpoint.Get("/customers/{id}").HandledBy("fake-crm").FromRoute("id"));
-var response = await factory.CreateClient().GetAsync("/customers/1");
-
-// Or just your processors and validators, without the application.
-await using var server = await DynamicEndpointsTestServer.StartAsync(b => b.AddProcessor<OrderLookupProcessor>());
-await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<OrderLookupProcessor>().FromRoute("id"));
-```
-
-`services.UseInMemoryDynamicEndpoints()` does the same in your own `ConfigureTestServices`. To test several instances, share one
-`InMemoryDynamicEndpointStore` and one `InMemoryDynamicEndpointChangeNotifier` between servers.
-</details>
-
-<details>
-<summary><b>Limitations (deliberate)</b></summary>
-
-- `MapDynamicEndpoints()` must be called on the application, not inside a `MapGroup`.
-- Conflict detection compares route *shapes*. It doesn't analyse constraints or optional segments.
-- Query arrays use repeated keys (`?tag=a&tag=b`). Header arrays are comma separated.
-- `DateTime` values must be RFC 3339 with an offset (`2026-01-31T12:00:00Z`).
-</details>
+| **Basics** | [Getting started](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/getting-started.html) · [How it works](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/how-it-works.html) · [Project template](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/project-template.html) |
+| **Defining endpoints** | [Definition model](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/definition-model.html) · [Validation: four layers, zero recompiles](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/validation.html) · [Processors, validators, seeders & assembly scanning](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/processors-and-validators.html) · [File uploads & forms](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/file-uploads.html) · [Handing work on](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/handing-work-on.html) |
+| **Managing endpoints** | [`IDynamicEndpointManager`](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/managing-endpoints.html) · [Change sets in your transaction](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/change-sets.html) · [Admin REST API](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/admin-api.html) · [Change events](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/change-events.html) · [Audit log](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/audit-log.html) · [Multi-tenancy](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multi-tenancy.html) |
+| **Requests & responses** | [Filters](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/filters.html) · [One error format](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/error-responses.html) · [Localized error messages](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/localization.html) · [OpenAPI](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/openapi.html) |
+| **Hosting** | [Options](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/options.html) · [Multiple instances](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multiple-instances.html) · [EF Core & migrations](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/ef-core.html) · [Testing](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/testing.html) · [Analyzers](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/analyzers.html) · [Benchmarks](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/benchmarks.html) |
+| **Safety** | [Security](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/security.html) · [Limitations](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/limitations.html) |
+
+The pages live in [`docs/`](docs/) and build with `dotnet tool restore && dotnet docfx docs/docfx.json` (output in `docs/_site`).
 
 ## 🔒 Security
 
-- 🚫 **Nothing is executed from definitions.** JsonLogic is a closed set of operators. There's no scripting and no Roslyn.
-- 🧨 **ReDoS-proof:** regex constraints run on `RegexOptions.NonBacktracking`. Backreferences and lookarounds are rejected on save.
-- 📏 **Limits:** JSON body size (1 MB), form body size (30 MB) and JSON depth (32) by default. Bodies that aren't valid UTF-8 are rejected.
-- 🧱 **Reserved prefixes:** the admin API is protected automatically, the rest via options. Clashes with the app's own endpoints are rejected.
-- 🔑 **Policies:** authorization policies referenced by definitions must exist when the definition is saved.
-- ⚠️ **The admin API is open by default.** Put `.RequireAuthorization(...)` on it.
+No code is executed from definitions, regexes are ReDoS-proof, bodies are size- and depth-limited, and clashes with your own
+routes are rejected. **The admin API is open by default**: put `.RequireAuthorization(...)` on it. Details in
+[Security](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/security.html).
 
 ## 🖼️ Screenshots
 
@@ -645,6 +188,29 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
 | `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
 | `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
+| `DynamicEndpoints.Templates` | `dotnet new dynamic-endpoints` project template |
+
+## ⏱️ Benchmarks
+
+Dynamic endpoints vs. equivalent hand-written minimal APIs, in-process (TestServer), from
+[`tests/DynamicEndpoints.Benchmarks`](tests/DynamicEndpoints.Benchmarks):
+
+| Scenario | Minimal API | Dynamic endpoint | Allocated (minimal → dynamic) |
+|---|---:|---:|---:|
+| GET `/items/{id}` (int route parameter) | ~12–100 µs | ~33–100 µs | 8.7 KB → 11.6 KB |
+| POST JSON, 3 validated fields (valid) | ~53–110 µs | ~42–80 µs | 10.9 KB → 30.5 KB |
+| POST JSON, 3 validated fields (invalid → 400) | ~73 µs | ~75–165 µs | 12.3 KB → 34.1 KB |
+| POST form (urlencoded, 3 fields) | ~49–58 µs | ~42–88 µs | 12.2 KB → 15.3 KB |
+
+| Endpoints | `UpsertAsync` (one endpoint, routing table swap) | `ReloadAsync` (one changed in store) |
+|---:|---:|---:|
+| 10 | ~78 µs / 87 KB | ~94 µs / 103 KB |
+| 100 | ~0.38 ms / 584 KB | ~2.6 ms / 858 KB |
+| 1000 | ~18 ms / 5.5 MB | ~36 ms / 8.4 MB |
+
+Short job on a dev laptop (Ryzen 7 PRO 5850U, Windows 11, .NET 10.0.8): request timings were within run-to-run noise (ranges from
+three runs), allocations were stable. Run them yourself with
+`dotnet run -c Release --project tests/DynamicEndpoints.Benchmarks -- --filter * --job short`. More in [Benchmarks](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/benchmarks.html).
 
 ## 🧪 Sample app
 
@@ -670,7 +236,8 @@ creates a GitHub Release with generated notes.
 | `major.minor` | `<VersionPrefix>` in `Directory.Build.props`. Bump it by hand |
 | `patch` | the last `vX.Y.*` tag + 1. Automatic, gap-free, resets after a prefix bump |
 
-Pushes that only touch `README.md`, `docs/` or `samples/` are not released.
+Pushes that only touch `README.md`, `docs/`, `samples/` or the benchmarks are not released. The documentation site is
+published to GitHub Pages by `.github/workflows/docs.yml`.
 
 Release notes come from [`CHANGELOG.md`](CHANGELOG.md). Add entries under **[Unreleased]** together with your change, and the
 workflow moves them under the released version. Pushes without entries get auto-generated notes only, and no bot commit.
@@ -685,13 +252,18 @@ dotnet test DynamicEndpoints.slnx
 
 ```
 src/DynamicEndpoints                       core library
+src/DynamicEndpoints.Analyzers             Roslyn analyzers (packed into DynamicEndpoints)
 src/DynamicEndpoints.EntityFrameworkCore   EF Core store
 src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
 src/DynamicEndpoints.Testing               test helpers
+src/DynamicEndpoints.Templates             dotnet new project template
 samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
+tests/DynamicEndpoints.Analyzers.Tests     analyzer tests
+tests/DynamicEndpoints.Benchmarks          BenchmarkDotNet benchmarks (not run by dotnet test)
+docs/                                      documentation site (docfx)
 ```
 
 Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainers) and are skipped when Docker isn't available.
@@ -710,6 +282,7 @@ Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainer
 - [x] Change events, transactional change sets, EF Core migrations, test kit
 - [ ] Admin UI as a reusable package
 - [ ] OpenTelemetry metrics per dynamic endpoint
+- [x] Multi-tenancy, audit log, analyzers, project template, documentation site
 
 ## ⚖️ License
 

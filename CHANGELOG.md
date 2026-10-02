@@ -41,6 +41,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - **Project template.** `dotnet new install DynamicEndpoints.Templates`, then `dotnet new dynamic-endpoints -n MyApi`, creates a
   minimal API with DynamicEndpoints on EF Core SQLite: the admin API, the dynamic OpenAPI document with Swagger UI, a typed sample
   processor and a seeder with demo endpoints. Options: `--DynamicEndpointsVersion` and `--no-swagger`.
+- **Documentation site** (docfx, with an API reference from the XML docs) at
+  https://doctorspider42.github.io/dotnet-dynamic-endpoints, built from `docs/` and published by `.github/workflows/docs.yml`.
+  The README is now a shorter landing page that links to it.
+- **Benchmarks** in `tests/DynamicEndpoints.Benchmarks` (BenchmarkDotNet): dynamic endpoints vs. equivalent minimal APIs, and the
+  cost of a routing table swap with 10, 100 and 1000 endpoints. Results are in the README.
+
+### Changed
+
+- The release workflow also skips pushes that only touch the benchmarks, the docs workflow or the tool manifest.
 
 ## [0.3.0] - 2026-10-02
 
