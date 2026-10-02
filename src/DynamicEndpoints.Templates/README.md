@@ -19,6 +19,8 @@ cd MyApi && dotnet run
   Your own `AppDbContext` holds the endpoint definitions. The database is created on start-up.
 - `MapDynamicEndpoints()`, the admin REST API at `/api/admin/endpoints` (secure it before going live) and the
   generated OpenAPI document at `/openapi/dynamic.json`.
+- The admin panel (`DynamicEndpoints.AdminUI`) at `/admin/`, on top of the admin API – `/` redirects there. Secure it like the
+  admin API.
 - Swagger UI at `/swagger` with both documents: the dynamic endpoints and the static (admin) API.
 - A typed processor (`DynamicEndpointProcessor<TConfig>` with `[DynamicProcessor]`) and a seeder that creates demo
   endpoints with the fluent builder. `AddFromAssemblyContaining<Program>()` registers both.
@@ -27,7 +29,8 @@ cd MyApi && dotnet run
 
 | Option | Default | |
 |---|---|---|
-| `--DynamicEndpointsVersion` | the template's release line, e.g. `0.3.*` | Version (or floating range) of the DynamicEndpoints packages. |
+| `--DynamicEndpointsVersion` | the template's release line, e.g. `0.4.*` | Version (or floating range) of the DynamicEndpoints packages. |
+| `--no-admin-ui` | `false` | Leave out the admin panel (`DynamicEndpoints.AdminUI`). |
 | `--no-swagger` | `false` | Leave out Swagger UI. |
 
 📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/project-template.html) ·

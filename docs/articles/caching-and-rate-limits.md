@@ -21,8 +21,8 @@ DynamicEndpoint.Get("/prices/{sku}")
   clients are told to revalidate every time (`no-cache`).
 - **Output caching** (`outputCacheSeconds`, `outputCachePolicy`): ASP.NET Core output caching, so the application needs
   `services.AddOutputCache()` and `app.UseOutputCache()` (checked on save). The cache key contains the path, the query string
-  (or `varyByQuery`) and the endpoint's header parameters (plus `varyByHeader`, also sent as `Vary`). Entries are evicted on every
-  instance when the definition changes. Requests with `Authorization` or cookies are not cached (the framework's default policy).
+  (or `varyByQuery`), the endpoint's header parameters (plus `varyByHeader`, also sent as `Vary`) and the endpoint that
+  answered. Entries are evicted on every instance when the definition changes. Requests with `Authorization` or cookies are not cached (the framework's default policy).
 - Headers are only added to successful responses. Caching is limited to GET endpoints and documented in OpenAPI
   (`Cache-Control`/`ETag` headers, `If-None-Match`, `304`).
 

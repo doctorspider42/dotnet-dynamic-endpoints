@@ -75,7 +75,8 @@ builder.Services.AddDynamicEndpoints()
 | `result` | `Rows` (array, at most `maxRows`), `Row` (first row or 404), `Value` (first column of the first row or 404) |
 | `maxRows`, `timeoutSeconds` | limits, 100 rows and 30 s by default |
 
-`SqlQueryProcessorOptions` also has `ParameterPrefix` (`@` by default, `:` for Oracle) and `RollBackTransaction` (default on).
+`SqlQueryProcessorOptions` also has `ParameterPrefix` (`@` by default, `:` for Oracle), `RollBackTransaction` (default on) and,
+with multi-tenancy, `ConnectionTenants` / `AllowTenants(…)` ([below](#with-multi-tenancy)).
 
 Treat "can edit definitions" as "can read what the connection's database user can read":
 
@@ -97,6 +98,23 @@ Treat "can edit definitions" as "can read what the connection's database user ca
 
 The processors see the request's tenant like any processor (`request.Tenant`), but their configuration is per definition: a
 tenant's endpoint can forward to the tenant's own backend, a shared endpoint forwards every tenant to the same target.
-`AllowedHosts` and the SQL connections are set by the application and apply to every tenant. Named connections aren't tied to
-a tenant: any definition may pick any `connection`. When tenants edit their own definitions through a
-[tenant admin API](multi-tenancy.md#admin-api), only register `sql-query` if every connection may be read by every tenant.
+`AllowedHosts` is set by the application and applies to every tenant.
+
+SQL connections are assigned to tenants:
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .UseMultiTenancy(t => t.FromHeader("X-Tenant-Id"))
+    .AddSqlQueryProcessor(_ => new NpgsqlConnection(appReadOnly), o =>
+    {
+        o.Connections["acme-reports"] = _ => new NpgsqlConnection(acmeReadOnly);
+        o.AllowTenants("acme-reports", "acme");            // "" is the default connection
+    });
+```
+
+- **Shared endpoints** (no tenant) may use every connection.
+- **A tenant's endpoints** may only use the connections assigned to that tenant (`AllowTenants`, or
+  `SqlQueryProcessorOptions.ConnectionTenants`). Unassigned connections – the default one included – are off limits, so a tenant's
+  admin can't query the application's or another tenant's database.
+- Checked when the definition is saved (the error lists only the connections available to that tenant) and again before every
+  run: an endpoint whose connection was taken away from its tenant answers `500` instead of running.

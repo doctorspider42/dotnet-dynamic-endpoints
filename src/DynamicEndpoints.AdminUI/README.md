@@ -22,15 +22,33 @@ prefix is reserved, so no dynamic endpoint can take it.
 
 ## What's inside
 
-- **Endpoints:** status (`Active`, `Disabled`, `Invalid`, `Pending`, `Draft`), drafts and scheduled publishes at a glance, filter.
-- **Editor:** parameters with constraints and formats, JsonLogic rules, custom validators, processor configuration, security,
-  documentation. *Validate*, *Save draft* (optionally with a publish time and a comment) or *Save & publish*.
+- **Endpoints:** status (`Active`, `Disabled`, `Invalid`, `Pending`, `Draft`), drafts and scheduled publishes at a glance, filter, selection.
+- **Editor:** parameters with constraints and formats, JsonLogic rules, custom validators, processor configuration (forms for
+  `http-forward`, `webhook`, `response` and `sql-query`, or JSON), security, caching and rate limits, documentation. *Validate*,
+  *Save draft* (optionally with a publish time and a comment) or *Save & publish*; *Code* shows the request as curl, HTTPie or C#.
 - **History:** every revision with its kind and comment, view any of them, diff with the previous or the published one, roll back.
-- **Try:** a form generated from the definition, with example values built from parameter examples, defaults, allowed
-  values, formats, lengths, ranges and custom JSON Schemas (or the definition's request example). *Copy as curl / HTTPie /
-  C# HttpClient* turns the request into code.
+- **Try:** a form generated from the definition, filled from the server's snippet generator, with *Copy as curl / HTTPie /
+  C# HttpClient*.
+- **Export & import:** all, shown or selected endpoints as JSON or YAML; import with `create`, `upsert` or `sync`, always after
+  a dry run. Plus an **OpenAPI import** wizard.
+- **Audit log:** per endpoint and for everything, with filters.
+- **Tenants:** tenant filter and column, a tenant field in the editor, and a *Try* console that sends the tenant.
 
-Drafts and history need a store that keeps them (the in-memory and EF Core stores do). With other stores those buttons are hidden.
+The panel asks the admin API's `GET /info` what the server supports and shows only that: drafts and history need a store that
+keeps them, the audit log a queryable sink, YAML `AddYamlFormat()`, tenants `UseMultiTenancy()`.
+
+## A panel per tenant
+
+Route parameters of the pattern are filled into the admin API path and the links:
+
+```csharp
+app.MapDynamicEndpointsTenantAdmin("/api/admin/tenants/{tenant}/endpoints").RequireAuthorization("tenant-admin");
+app.MapDynamicEndpointsAdminUI("/admin/tenants/{tenant}", "/api/admin/tenants/{tenant}/endpoints", o =>
+    o.OpenApiUrl = "/openapi/{tenant}/dynamic.json").RequireAuthorization("tenant-admin");
+```
+
+Secure both with a policy that checks the user belongs to the tenant. On the global panel, `TenantOpenApiUrl` and
+`TenantSwaggerUrl` (with a `{tenant}` placeholder) follow the tenant picked in the filter.
 
 ## Notes
 
