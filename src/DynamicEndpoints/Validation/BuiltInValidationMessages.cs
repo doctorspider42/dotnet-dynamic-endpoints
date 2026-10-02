@@ -32,6 +32,12 @@ internal static class BuiltInValidationMessages
                 ["title.validation"] = "One or more validation errors occurred.",
                 ["title.payloadTooLarge"] = "Payload too large",
                 ["title.unsupportedMediaType"] = "Unsupported media type",
+                ["title.unauthorized"] = "Unauthorized",
+                ["title.forbidden"] = "Forbidden",
+                ["title.notFound"] = "Not found",
+                ["title.methodNotAllowed"] = "Method not allowed",
+                ["title.error"] = "An unexpected error occurred.",
+                ["title.status"] = "The request failed with status {0}.",
 
                 // Schema
                 ["notAllowed"] = "This value is not allowed.",
@@ -99,6 +105,12 @@ internal static class BuiltInValidationMessages
                 ["title.validation"] = "Wystąpił co najmniej jeden błąd walidacji.",
                 ["title.payloadTooLarge"] = "Za duża treść żądania",
                 ["title.unsupportedMediaType"] = "Nieobsługiwany typ treści",
+                ["title.unauthorized"] = "Brak uwierzytelnienia",
+                ["title.forbidden"] = "Brak uprawnień",
+                ["title.notFound"] = "Nie znaleziono",
+                ["title.methodNotAllowed"] = "Niedozwolona metoda",
+                ["title.error"] = "Wystąpił nieoczekiwany błąd.",
+                ["title.status"] = "Żądanie zakończyło się statusem {0}.",
 
                 ["notAllowed"] = "Ta wartość jest niedozwolona.",
                 ["type"] = "Oczekiwano typu {0}, otrzymano {1}.",

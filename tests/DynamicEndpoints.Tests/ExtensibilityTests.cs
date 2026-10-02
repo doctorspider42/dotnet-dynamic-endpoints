@@ -211,12 +211,13 @@ public sealed class ExtensibilityTests
 
         Assert.Equal("apiKey", document!["components"]!["securitySchemes"]!["ApiKey"]!["type"]!.GetValue<string>());
         Assert.Equal("X-Api-Key", document["components"]!["securitySchemes"]!["ApiKey"]!["name"]!.GetValue<string>());
-        Assert.NotNull(document["security"]![0]!["ApiKey"]);
+        Assert.Null(document["security"]); // attached to each operation instead
         Assert.Equal("https://api.example.com", document["servers"]![0]!["url"]!.GetValue<string>());
 
         var get = document["paths"]!["/items"]!["get"]!;
         Assert.Equal(["X-End-User"], get["parameters"]!.AsArray().Select(p => p!["name"]!.GetValue<string>()));
         Assert.Equal("catalog", get["x-feature"]!.GetValue<string>());
+        Assert.NotNull(get["security"]![0]!["ApiKey"]);
 
         var post = document["paths"]!["/items"]!["post"]!["parameters"]!.AsArray();
         Assert.Equal(["X-End-User", "Idempotency-Key"], post.Select(p => p!["name"]!.GetValue<string>()));

@@ -117,6 +117,11 @@ internal sealed class DynamicOpenApiDocumentProvider(
                 parameter["description"] = p.Description;
             }
 
+            if (p.Example is not null)
+            {
+                parameter["example"] = p.Example.DeepClone();
+            }
+
             parameters.Add(parameter);
         }
 
@@ -141,6 +146,11 @@ internal sealed class DynamicOpenApiDocumentProvider(
                 parameter["description"] = header.Description;
             }
 
+            if (header.Example is not null)
+            {
+                parameter["example"] = header.Example.DeepClone();
+            }
+
             parameters.Add(parameter);
         }
 
@@ -157,10 +167,9 @@ internal sealed class DynamicOpenApiDocumentProvider(
                 ["required"] = bodyParameters.Any(p => p.Required),
                 ["content"] = new JsonObject
                 {
-                    ["application/json"] = new JsonObject
-                    {
-                        ["schema"] = ParameterSchemas.BuildObject(bodyParameters, forDocumentation: true, useSourceNames: true),
-                    },
+                    ["application/json"] = WithExample(
+                        new JsonObject { ["schema"] = ParameterSchemas.BuildObject(bodyParameters, forDocumentation: true, useSourceNames: true) },
+                        RequestExample(d, bodyParameters)),
                 },
             };
         }
@@ -169,7 +178,7 @@ internal sealed class DynamicOpenApiDocumentProvider(
         if (formParameters.Count > 0)
         {
             var schema = ParameterSchemas.BuildObject(formParameters, forDocumentation: true, useSourceNames: true);
-            var multipart = new JsonObject { ["schema"] = schema };
+            var multipart = WithExample(new JsonObject { ["schema"] = schema }, RequestExample(d, formParameters));
             var encoding = new JsonObject();
             foreach (var p in formParameters.Where(p => p.AllowedContentTypes is { Count: > 0 }))
             {
@@ -184,7 +193,7 @@ internal sealed class DynamicOpenApiDocumentProvider(
             var content = new JsonObject { ["multipart/form-data"] = multipart };
             if (!formParameters.Any(DynamicEndpointMetadata.IsFile))
             {
-                content["application/x-www-form-urlencoded"] = new JsonObject { ["schema"] = schema.DeepClone() };
+                content["application/x-www-form-urlencoded"] = WithExample(new JsonObject { ["schema"] = schema.DeepClone() }, RequestExample(d, formParameters));
             }
 
             operation["requestBody"] = new JsonObject
@@ -195,12 +204,15 @@ internal sealed class DynamicOpenApiDocumentProvider(
         }
 
         var success = new JsonObject { ["description"] = "Success" };
-        if (d.ResponseSchema is not null)
+        if (d.ResponseSchema is not null || d.ResponseExample is not null)
         {
-            success["content"] = new JsonObject
+            var media = new JsonObject();
+            if (d.ResponseSchema is not null)
             {
-                ["application/json"] = new JsonObject { ["schema"] = d.ResponseSchema.DeepClone() },
-            };
+                media["schema"] = d.ResponseSchema.DeepClone();
+            }
+
+            success["content"] = new JsonObject { ["application/json"] = WithExample(media, d.ResponseExample?.DeepClone()) };
         }
 
         var responses = new JsonObject
@@ -220,6 +232,24 @@ internal sealed class DynamicOpenApiDocumentProvider(
             responses["403"] = new JsonObject { ["description"] = "Forbidden" };
         }
 
+        if (!d.AllowAnonymous)
+        {
+            var security = openApi.OperationSecurity
+                .Where(s => s.AppliesTo?.Invoke(d) != false)
+                .Select(s => (JsonNode)s.Requirement.DeepClone())
+                .ToArray();
+            if (security.Length > 0)
+            {
+                operation["security"] = new JsonArray(security);
+                responses["401"] ??= new JsonObject { ["description"] = "Unauthorized" };
+            }
+        }
+        else if (openApi.SecurityRequirements.Count > 0)
+        {
+            // Anonymous endpoints opt out of the document-wide requirements.
+            operation["security"] = new JsonArray();
+        }
+
         operation["responses"] = responses;
         operation["x-dynamic-endpoint"] = new JsonObject
         {
@@ -229,6 +259,32 @@ internal sealed class DynamicOpenApiDocumentProvider(
         };
         openApi.ConfigureOperation?.Invoke(operation, d);
         return operation;
+    }
+
+    private static JsonObject WithExample(JsonObject media, JsonNode? example)
+    {
+        if (example is not null)
+        {
+            media["example"] = example;
+        }
+
+        return media;
+    }
+
+    private static JsonObject? RequestExample(DynamicEndpointDefinition d, IReadOnlyList<ParameterDefinition> parameters)
+    {
+        if (d.RequestExample is not null)
+        {
+            return (JsonObject)d.RequestExample.DeepClone();
+        }
+
+        var example = new JsonObject();
+        foreach (var p in parameters.Where(p => p.Example is not null))
+        {
+            example[p.EffectiveSourceName] = p.Example!.DeepClone();
+        }
+
+        return example.Count > 0 ? example : null;
     }
 
     private static string BuildDescription(DynamicEndpointDefinition d)

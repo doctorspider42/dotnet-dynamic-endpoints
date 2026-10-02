@@ -42,6 +42,7 @@ public static class DynamicEndpointsServiceCollectionExtensions
         services.TryAddSingleton<IDynamicEndpointManager, DynamicEndpointManager>();
         services.TryAddSingleton<IDynamicOpenApiDocumentProvider, DynamicOpenApiDocumentProvider>();
         services.TryAddSingleton<IDynamicEndpointStore, InMemoryDynamicEndpointStore>();
+        services.TryAddSingleton<IDynamicErrorResponseFactory, DefaultDynamicErrorResponseFactory>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DynamicEndpointsHostedService>());
 
         return new DynamicEndpointsBuilder(services);
@@ -162,6 +163,73 @@ public static class DynamicEndpointsServiceCollectionExtensions
         Func<DynamicValidationFailedContext, ValueTask>? onValidationFailed = null)
     {
         builder.Services.AddSingleton<IDynamicEndpointFilter>(new DelegateFilter(onRequest, onValidationFailed));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a handler that runs after endpoints were created, changed or deleted (audit, cache invalidation, …).
+    /// Handlers are scoped and run in registration order – see <see cref="IDynamicEndpointChangeHandler"/>.
+    /// </summary>
+    public static IDynamicEndpointsBuilder AddChangeHandler<THandler>(this IDynamicEndpointsBuilder builder)
+        where THandler : class, IDynamicEndpointChangeHandler
+    {
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IDynamicEndpointChangeHandler, THandler>());
+        return builder;
+    }
+
+    /// <summary>Adds an inline change handler – see <see cref="IDynamicEndpointChangeHandler"/>.</summary>
+    public static IDynamicEndpointsBuilder OnChanged(
+        this IDynamicEndpointsBuilder builder,
+        Func<DynamicEndpointChangedEvent, CancellationToken, Task> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        builder.Services.AddSingleton<IDynamicEndpointChangeHandler>(new DelegateChangeHandler(handler));
+        return builder;
+    }
+
+    /// <summary>
+    /// Propagates changes to the other instances right away through <typeparamref name="TNotifier"/> (singleton), e.g.
+    /// PostgreSQL <c>LISTEN/NOTIFY</c> or Redis pub/sub. Keep <see cref="DynamicEndpointsOptions.RefreshInterval"/> as a fallback.
+    /// </summary>
+    public static IDynamicEndpointsBuilder UseChangeNotifier<TNotifier>(this IDynamicEndpointsBuilder builder)
+        where TNotifier : class, IDynamicEndpointChangeNotifier
+    {
+        builder.Services.Replace(ServiceDescriptor.Singleton<IDynamicEndpointChangeNotifier, TNotifier>());
+        return builder;
+    }
+
+    /// <summary>Propagates changes to the other instances through <paramref name="notifier"/>.</summary>
+    public static IDynamicEndpointsBuilder UseChangeNotifier(this IDynamicEndpointsBuilder builder, IDynamicEndpointChangeNotifier notifier)
+    {
+        ArgumentNullException.ThrowIfNull(notifier);
+        builder.Services.Replace(ServiceDescriptor.Singleton(notifier));
+        return builder;
+    }
+
+    /// <summary>Adds a step that prepares the store before definitions are loaded (e.g. migrations) – see <see cref="IDynamicEndpointStoreInitializer"/>.</summary>
+    public static IDynamicEndpointsBuilder AddStoreInitializer<TInitializer>(this IDynamicEndpointsBuilder builder)
+        where TInitializer : class, IDynamicEndpointStoreInitializer
+    {
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Scoped<IDynamicEndpointStoreInitializer, TInitializer>());
+        return builder;
+    }
+
+    /// <summary>
+    /// Builds every error response with <typeparamref name="TFactory"/> (singleton) – see <see cref="IDynamicErrorResponseFactory"/>.
+    /// Add <c>app.UseDynamicEndpointsErrorResponses()</c> to format empty 401/403/404 responses and exceptions the same way.
+    /// </summary>
+    public static IDynamicEndpointsBuilder UseErrorResponseFactory<TFactory>(this IDynamicEndpointsBuilder builder)
+        where TFactory : class, IDynamicErrorResponseFactory
+    {
+        builder.Services.Replace(ServiceDescriptor.Singleton<IDynamicErrorResponseFactory, TFactory>());
+        return builder;
+    }
+
+    /// <summary>Builds every error response with <paramref name="factory"/> – see <see cref="IDynamicErrorResponseFactory"/>.</summary>
+    public static IDynamicEndpointsBuilder UseErrorResponses(this IDynamicEndpointsBuilder builder, Func<DynamicErrorContext, IResult> factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        builder.Services.Replace(ServiceDescriptor.Singleton<IDynamicErrorResponseFactory>(new DelegateErrorResponseFactory(factory)));
         return builder;
     }
 

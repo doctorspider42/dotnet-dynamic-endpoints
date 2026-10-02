@@ -42,6 +42,15 @@ public sealed class DynamicEndpoint
     public DynamicEndpoint RequireRateLimiting(string policy) => Set(d => d with { RateLimitingPolicy = policy });
     public DynamicEndpoint WithResponseSchema(string jsonSchema) => Set(d => d with { ResponseSchema = ParseObject(jsonSchema) });
 
+    /// <summary>Example request body for the OpenAPI document, as JSON or as an object to serialize.</summary>
+    public DynamicEndpoint WithRequestExample(object example) => Set(d => d with { RequestExample = ToObject(example) });
+
+    /// <summary>Example response for the OpenAPI document, as JSON or as an object to serialize.</summary>
+    public DynamicEndpoint WithResponseExample(object example) => Set(d => d with
+    {
+        ResponseExample = example is string json ? JsonNode.Parse(json) : JsonSerializer.SerializeToNode(example, DynamicEndpointsJson.SerializerOptions),
+    });
+
     /// <summary>Selects the processor; <paramref name="configuration"/> may be a <see cref="JsonObject"/>, JSON string or any serializable object.</summary>
     public DynamicEndpoint HandledBy(string processor, object? configuration = null) =>
         Set(d => d with { Processor = processor, ProcessorConfig = ToObject(configuration) });

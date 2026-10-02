@@ -65,6 +65,9 @@ public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderCon
 The default store is in-memory. For persistence add
 [DynamicEndpoints.EntityFrameworkCore](https://www.nuget.org/packages/DynamicEndpoints.EntityFrameworkCore).
 For FluentValidation support add [DynamicEndpoints.FluentValidation](https://www.nuget.org/packages/DynamicEndpoints.FluentValidation).
+For instant propagation across instances add [DynamicEndpoints.PostgreSql](https://www.nuget.org/packages/DynamicEndpoints.PostgreSql)
+(`LISTEN/NOTIFY`) or [DynamicEndpoints.Redis](https://www.nuget.org/packages/DynamicEndpoints.Redis) (pub/sub), and for tests
+[DynamicEndpoints.Testing](https://www.nuget.org/packages/DynamicEndpoints.Testing).
 
 ## Learn more
 

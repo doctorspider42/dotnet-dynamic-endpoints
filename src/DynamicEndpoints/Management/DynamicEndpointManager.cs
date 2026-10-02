@@ -3,6 +3,7 @@ using DynamicEndpoints.Runtime;
 using DynamicEndpoints.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DynamicEndpoints.Management;
 
@@ -13,10 +14,20 @@ internal sealed class DynamicEndpointManager(
     ProcessorRegistry processors,
     ValidatorRegistry validators,
     TimeProvider timeProvider,
-    ILogger<DynamicEndpointManager> logger) : IDynamicEndpointManager, IDisposable
+    IOptions<DynamicEndpointsOptions> options,
+    ILogger<DynamicEndpointManager> logger,
+    IDynamicEndpointChangeNotifier? notifier = null) : IDynamicEndpointManager, IDisposable
 {
     // Serializes mutations and reloads of this instance, so a reload can never resurrect stale state.
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    internal SemaphoreSlim Gate { get; } = new(1, 1);
+
+    internal DynamicEndpointRuntime Runtime => runtime;
+
+    internal ILogger Logger => logger;
+
+    internal DateTimeOffset Now => timeProvider.GetUtcNow();
+
+    private bool _loaded;
 
     public IReadOnlyList<DynamicProcessorDescriptor> Processors => processors.All;
 
@@ -38,130 +49,75 @@ internal sealed class DynamicEndpointManager(
         return definition is null ? null : ToState(definition);
     }
 
-    public async Task<DynamicEndpointDefinition> CreateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
+    public Task<DynamicEndpointDefinition> CreateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.CreateAsync(definition, cancellationToken), cancellationToken);
+
+    public Task<DynamicEndpointDefinition> UpdateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.UpdateAsync(definition, cancellationToken), cancellationToken);
+
+    public async Task<DynamicEndpointDefinition> UpsertAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(definition);
-        await _gate.WaitAsync(cancellationToken);
-        try
+        // Another instance may write between our read and write – the store's concurrency check catches it, a retry resolves it.
+        for (var attempt = 1; ; attempt++)
         {
-            var now = timeProvider.GetUtcNow();
-            var d = DefinitionNormalizer.Normalize(definition) with
+            try
             {
-                Id = definition.Id == Guid.Empty ? Guid.CreateVersion7() : definition.Id,
-                Revision = 1,
-                CreatedAt = now,
-                UpdatedAt = now,
-            };
-
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var store = scope.ServiceProvider.GetRequiredService<IDynamicEndpointStore>();
-            if (await store.FindAsync(d.Id, cancellationToken) is not null)
-            {
-                throw new DynamicEndpointValidationException("id", $"An endpoint with id '{d.Id}' already exists.");
+                return await WithChangesAsync(changes => changes.UpsertAsync(definition, cancellationToken), cancellationToken);
             }
-
-            var compiled = await CompileOrThrowAsync(d, cancellationToken);
-            await store.AddAsync(d, cancellationToken);
-            runtime.Upsert(new RuntimeEntry(d, compiled, []));
-
-            logger.LogInformation("Created dynamic endpoint {Method} {Route} ({Id}).", d.Method, d.Route, d.Id);
-            return DynamicEndpointsJson.DeepClone(d);
-        }
-        finally
-        {
-            _gate.Release();
+            catch (DynamicEndpointConcurrencyException) when (attempt < 3)
+            {
+            }
         }
     }
 
-    public async Task<DynamicEndpointDefinition> UpdateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.DeleteAsync(id, cancellationToken), cancellationToken);
+
+    public Task<DynamicEndpointDefinition> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default) =>
+        WithChangesAsync(changes => changes.SetEnabledAsync(id, enabled, cancellationToken), cancellationToken);
+
+    public DynamicEndpointChangeSet BeginChanges(IDynamicEndpointStore store)
     {
-        ArgumentNullException.ThrowIfNull(definition);
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var store = scope.ServiceProvider.GetRequiredService<IDynamicEndpointStore>();
-            var current = await store.FindAsync(definition.Id, cancellationToken)
-                ?? throw new DynamicEndpointNotFoundException(definition.Id);
-            if (current.Revision != definition.Revision)
-            {
-                throw new DynamicEndpointConcurrencyException(definition.Id, definition.Revision, current.Revision);
-            }
-
-            var d = DefinitionNormalizer.Normalize(definition) with
-            {
-                Revision = current.Revision + 1,
-                CreatedAt = current.CreatedAt,
-                UpdatedAt = timeProvider.GetUtcNow(),
-            };
-
-            var compiled = await CompileOrThrowAsync(d, cancellationToken);
-            await store.UpdateAsync(d, current.Revision, cancellationToken);
-            runtime.Upsert(new RuntimeEntry(d, compiled, []));
-
-            logger.LogInformation("Updated dynamic endpoint {Method} {Route} ({Id}) to revision {Revision}.", d.Method, d.Route, d.Id, d.Revision);
-            return DynamicEndpointsJson.DeepClone(d);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        ArgumentNullException.ThrowIfNull(store);
+        return new DynamicEndpointChangeSet(this, store);
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public DynamicEndpointChangeSet BeginChanges(IServiceProvider services)
     {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var deleted = await WithStoreAsync(store => store.DeleteAsync(id, cancellationToken));
-            runtime.Remove(id);
-            if (deleted)
-            {
-                logger.LogInformation("Deleted dynamic endpoint {Id}.", id);
-            }
-
-            return deleted;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
-    public async Task<DynamicEndpointDefinition> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
-    {
-        var current = await WithStoreAsync(store => store.FindAsync(id, cancellationToken))
-            ?? throw new DynamicEndpointNotFoundException(id);
-        return current.Enabled == enabled
-            ? current
-            : await UpdateAsync(current with { Enabled = enabled }, cancellationToken);
+        ArgumentNullException.ThrowIfNull(services);
+        return BeginChanges(services.GetRequiredService<IDynamicEndpointStore>());
     }
 
     public async Task<DynamicEndpointValidationResult> ValidateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        var errors = await CompileAsync(DefinitionNormalizer.Normalize(definition), cancellationToken);
-        return new DynamicEndpointValidationResult(!errors.Errors.HasErrors, errors.Errors.ToDictionary());
+        var result = await CompileAsync(DefinitionNormalizer.Normalize(definition), runtime.ActiveEndpoints(), cancellationToken);
+        return new DynamicEndpointValidationResult(!result.Errors.HasErrors, result.Errors.ToDictionary());
     }
 
     public async Task ReloadAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(cancellationToken);
+        List<DynamicEndpointChangedEvent> changes;
+        await Gate.WaitAsync(cancellationToken);
         try
         {
             var definitions = await WithStoreAsync(store => store.GetAllAsync(cancellationToken));
+            var previous = runtime.Entries.ToDictionary(e => e.Definition.Id);
             var entries = new List<RuntimeEntry>(definitions.Count);
             var active = new List<CompiledEndpoint>();
+            changes = [];
 
             // Oldest wins when the store contains clashing routes (e.g. edited by hand).
             foreach (var definition in definitions.OrderBy(d => d.CreatedAt).ThenBy(d => d.Id))
             {
-                var existing = runtime.Find(definition.Id);
+                var existing = previous.GetValueOrDefault(definition.Id);
+                var unchanged = existing is not null &&
+                    existing.Definition.Revision == definition.Revision &&
+                    existing.Definition.UpdatedAt == definition.UpdatedAt;
+
                 CompiledEndpoint? compiled;
                 List<string> errors;
-                if (existing?.Compiled is not null &&
-                    existing.Definition.Revision == definition.Revision &&
-                    existing.Definition.UpdatedAt == definition.UpdatedAt)
+                if (unchanged && existing!.Compiled is not null)
                 {
                     compiled = existing.Compiled;
                     errors = [];
@@ -188,26 +144,84 @@ internal sealed class DynamicEndpointManager(
                         definition.Method, definition.Route, definition.Id, string.Join(" | ", errors));
                 }
 
+                if (!unchanged)
+                {
+                    changes.Add(new DynamicEndpointChangedEvent(
+                        existing is null ? DynamicEndpointChangeKind.Created : DynamicEndpointChangeKind.Updated,
+                        definition.Id, DynamicEndpointChangeOrigin.Remote, definition, existing?.Definition));
+                }
+
                 entries.Add(new RuntimeEntry(definition, compiled, errors));
+                previous.Remove(definition.Id);
             }
+
+            changes.AddRange(previous.Values.Select(e => new DynamicEndpointChangedEvent(
+                DynamicEndpointChangeKind.Deleted, e.Definition.Id, DynamicEndpointChangeOrigin.Remote, null, e.Definition)));
 
             runtime.Replace(entries);
             logger.LogDebug("Loaded {Count} dynamic endpoints ({Active} active).", entries.Count, active.Count);
+
+            // The initial load is no change – everything simply appears.
+            if (!_loaded)
+            {
+                _loaded = true;
+                changes.Clear();
+            }
         }
         finally
         {
-            _gate.Release();
+            Gate.Release();
         }
+
+        await RaiseAsync(changes, cancellationToken);
     }
 
-    public void Dispose() => _gate.Dispose();
+    public void Dispose() => Gate.Dispose();
 
-    private async Task<CompilationResult> CompileAsync(DynamicEndpointDefinition d, CancellationToken cancellationToken)
+    /// <summary>Applies committed changes of a change set: routing table, change handlers, other instances.</summary>
+    internal async Task ApplyAsync(IReadOnlyList<StagedChange> changes, CancellationToken cancellationToken)
+    {
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            runtime.Apply(entries =>
+            {
+                foreach (var change in changes)
+                {
+                    var id = change.Event.Id;
+                    if (change.Event.Kind == DynamicEndpointChangeKind.Deleted)
+                    {
+                        entries.Remove(id);
+                        continue;
+                    }
+
+                    // A reload may already have picked up an even newer revision (e.g. from another instance) – never go back.
+                    var definition = change.Event.Definition!;
+                    if (entries.GetValueOrDefault(id) is { } loaded && loaded.Definition.Revision > definition.Revision)
+                    {
+                        continue;
+                    }
+
+                    entries[id] = new RuntimeEntry(definition, change.Compiled, []);
+                }
+            });
+        }
+        finally
+        {
+            Gate.Release();
+        }
+
+        var events = changes.Select(c => c.Event).ToList();
+        await RaiseAsync(events, cancellationToken);
+        await NotifyAsync(events);
+    }
+
+    internal async Task<CompilationResult> CompileAsync(DynamicEndpointDefinition d, IEnumerable<CompiledEndpoint> active, CancellationToken cancellationToken)
     {
         var result = await compiler.CompileAsync(d, cancellationToken);
         if (result.Endpoint is not null && d.Enabled)
         {
-            foreach (var conflict in runtime.FindConflicts(result.Endpoint, runtime.ActiveEndpoints()))
+            foreach (var conflict in runtime.FindConflicts(result.Endpoint, active))
             {
                 result.Errors.Add("route", conflict);
             }
@@ -216,10 +230,58 @@ internal sealed class DynamicEndpointManager(
         return result.Errors.HasErrors ? result with { Endpoint = null } : result;
     }
 
-    private async Task<CompiledEndpoint> CompileOrThrowAsync(DynamicEndpointDefinition d, CancellationToken cancellationToken)
+    private async Task<T> WithChangesAsync<T>(Func<DynamicEndpointChangeSet, Task<T>> action, CancellationToken cancellationToken)
     {
-        var result = await CompileAsync(d, cancellationToken);
-        return result.Endpoint ?? throw new DynamicEndpointValidationException(result.Errors.ToDictionary());
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var changes = BeginChanges(scope.ServiceProvider.GetRequiredService<IDynamicEndpointStore>());
+        var result = await action(changes);
+        await changes.ApplyAsync(cancellationToken);
+        return result;
+    }
+
+    private async Task RaiseAsync(IReadOnlyList<DynamicEndpointChangedEvent> changes, CancellationToken cancellationToken)
+    {
+        if (changes.Count == 0)
+        {
+            return;
+        }
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var handlers = scope.ServiceProvider.GetServices<IDynamicEndpointChangeHandler>().ToList();
+        foreach (var change in changes)
+        {
+            foreach (var handler in handlers)
+            {
+                try
+                {
+                    await handler.OnChangedAsync(change, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    logger.LogError(ex, "Change handler {Handler} failed for {Kind} of dynamic endpoint {Id}.",
+                        handler.GetType().Name, change.Kind, change.Id);
+                }
+            }
+        }
+    }
+
+    private async Task NotifyAsync(IReadOnlyList<DynamicEndpointChangedEvent> changes)
+    {
+        if (notifier is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Not tied to the caller's cancellation – the change is committed, the other instances must hear about it.
+            var notification = new DynamicEndpointChangeNotification(options.Value.InstanceId, changes.Select(c => c.Id).Distinct().ToList());
+            await notifier.PublishAsync(notification, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Notifying other instances about dynamic endpoint changes failed; they pick them up on their next refresh.");
+        }
     }
 
     private DynamicEndpointState ToState(DynamicEndpointDefinition definition)

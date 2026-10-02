@@ -12,6 +12,7 @@ public sealed class DynamicValidationContext
     private readonly CompiledValidator _validator;
     private readonly ValidationErrors _errors;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> _files;
+    private readonly DynamicRequestItems _items;
     private JsonObject? _configuration;
 
     internal DynamicValidationContext(
@@ -21,9 +22,11 @@ public sealed class DynamicValidationContext
         JsonObject parameters,
         IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> files,
         HttpContext httpContext,
-        ValidationErrors errors)
+        ValidationErrors errors,
+        DynamicRequestItems items)
     {
         _endpoint = endpoint;
+        _items = items;
         _validator = validator;
         _errors = errors;
         _files = files;
@@ -33,6 +36,15 @@ public sealed class DynamicValidationContext
     }
 
     public DynamicEndpointDefinition Endpoint => _endpoint.Definition;
+
+    /// <summary>The endpoint being served, as attached to the routed endpoint.</summary>
+    public DynamicEndpointMetadata Metadata => _endpoint.Metadata;
+
+    /// <summary>
+    /// Per-request storage shared by all validators, filters and the processor (<see cref="DynamicRequest.Items"/>) – hand over
+    /// work you already did, e.g. a loaded entity, so nobody repeats it.
+    /// </summary>
+    public IDictionary<object, object?> Items => _items.Values;
 
     /// <summary>Name the validator is registered under.</summary>
     public string ValidatorName => _validator.Name;
@@ -73,6 +85,25 @@ public sealed class DynamicValidationContext
             typeof(T),
             static (_, config) => config.Deserialize<T>(DynamicEndpointsJson.SerializerOptions),
             _validator.Configuration);
+
+    /// <summary>
+    /// Hands the parsed form of a parameter (default: the validated one) on to later validators and the processor, which read it
+    /// with <see cref="DynamicRequest.GetParsedValue{T}"/> – e.g. a decoded document, so it is decoded only once.
+    /// </summary>
+    public void SetParsedValue(object? value, string? parameterName = null)
+    {
+        var name = parameterName ?? Parameter?.Name
+            ?? throw new InvalidOperationException("Request-level validators must name the parameter.");
+        if (!_endpoint.ParametersByName.ContainsKey(name))
+        {
+            throw new ArgumentException($"The endpoint has no parameter '{name}'.", nameof(parameterName));
+        }
+
+        _items.Parsed[name] = value;
+    }
+
+    /// <summary>A value an earlier validator handed over with <see cref="SetParsedValue"/>.</summary>
+    public bool TryGetParsedValue<T>(string name, out T? value) => _items.TryGetParsed(name, out value);
 
     /// <summary>Reports an error for the validated parameter (or for the request as a whole).</summary>
     public void AddError(string message) => AddError(null, message);

@@ -42,6 +42,9 @@ public abstract class DynamicEndpointFilterContext
 
     public CancellationToken RequestAborted => HttpContext.RequestAborted;
 
+    /// <summary>Per-request storage shared with validators and the processor (<see cref="DynamicRequest.Items"/>).</summary>
+    public IDictionary<object, object?> Items => DynamicRequestItems.For(HttpContext).Values;
+
     /// <summary>The response to send.</summary>
     public IResult? Result { get; set; }
 }

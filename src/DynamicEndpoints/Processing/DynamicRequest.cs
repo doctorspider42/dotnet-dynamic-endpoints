@@ -10,15 +10,18 @@ public sealed class DynamicRequest
 {
     private readonly CompiledEndpoint _endpoint;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> _files;
+    private readonly DynamicRequestItems _items;
     private JsonObject? _configuration;
 
     internal DynamicRequest(
         CompiledEndpoint endpoint,
         JsonObject parameters,
         IReadOnlyDictionary<string, IReadOnlyList<IFormFile>> files,
-        HttpContext httpContext)
+        HttpContext httpContext,
+        DynamicRequestItems items)
     {
         _endpoint = endpoint;
+        _items = items;
         _files = files;
         Parameters = parameters;
         HttpContext = httpContext;
@@ -56,6 +59,18 @@ public sealed class DynamicRequest
 
     public T GetRequired<T>(string name) =>
         Get<T>(name) ?? throw new InvalidOperationException($"Parameter '{name}' has no value.");
+
+    /// <summary>Per-request storage shared with validators and filters (<see cref="DynamicValidationContext.Items"/>).</summary>
+    public IDictionary<object, object?> Items => _items.Values;
+
+    /// <summary>
+    /// The parsed form of a parameter a validator handed over with <see cref="DynamicValidationContext.SetParsedValue"/>,
+    /// or <c>default</c> when none did.
+    /// </summary>
+    public T? GetParsedValue<T>(string name) => _items.TryGetParsed<T>(name, out var value) ? value : default;
+
+    /// <inheritdoc cref="GetParsedValue{T}"/>
+    public bool TryGetParsedValue<T>(string name, out T? value) => _items.TryGetParsed(name, out value);
 
     /// <summary>The uploaded file of a <see cref="ParameterType.File"/> parameter, or <c>null</c> when none was sent.</summary>
     public IFormFile? GetFile(string name) => _files.TryGetValue(name, out var files) ? files[0] : null;

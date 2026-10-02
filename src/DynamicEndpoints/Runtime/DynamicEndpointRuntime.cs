@@ -59,6 +59,18 @@ internal sealed class DynamicEndpointRuntime(
         }
     }
 
+    /// <summary>Applies several changes and publishes the routing table once.</summary>
+    public void Apply(Action<Dictionary<Guid, RuntimeEntry>> change)
+    {
+        lock (_lock)
+        {
+            var entries = new Dictionary<Guid, RuntimeEntry>(_entries);
+            change(entries);
+            _entries = entries;
+            Publish();
+        }
+    }
+
     public void Remove(Guid id)
     {
         lock (_lock)

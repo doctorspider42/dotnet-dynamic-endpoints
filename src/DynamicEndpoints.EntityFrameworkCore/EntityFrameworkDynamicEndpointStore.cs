@@ -3,7 +3,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DynamicEndpoints.EntityFrameworkCore;
 
-internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext context) : IDynamicEndpointStore
+/// <summary>
+/// Store backed by a DbContext. With <c>saveChanges: false</c> writes are only tracked by the context – they are saved by your
+/// own <c>SaveChanges</c>, together with your other changes and in your transaction (see <see cref="DbContextDynamicEndpointExtensions.GetDynamicEndpointStore"/>).
+/// </summary>
+internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext context, bool saveChanges) : IDynamicEndpointStore
     where TContext : DbContext
 {
     private DbSet<DynamicEndpointRecord> Records => context.Set<DynamicEndpointRecord>();
@@ -23,7 +27,7 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
     public async Task AddAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken)
     {
         Records.Add(Apply(definition, new DynamicEndpointRecord()));
-        await context.SaveChangesAsync(cancellationToken);
+        await SaveAsync(definition.Id, definition.Revision, cancellationToken);
     }
 
     public async Task UpdateAsync(DynamicEndpointDefinition definition, int expectedRevision, CancellationToken cancellationToken)
@@ -36,20 +40,50 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
         }
 
         // The revision column is a concurrency token – the UPDATE only succeeds if nobody bumped it in the meantime.
-        context.Entry(record).Property(r => r.Version).OriginalValue = expectedRevision;
+        // A record already changed in this unit of work keeps the revision it was loaded with.
+        var entry = context.Entry(record);
+        if (entry.State == EntityState.Unchanged)
+        {
+            entry.Property(r => r.Version).OriginalValue = expectedRevision;
+        }
+
         Apply(definition, record);
+        await SaveAsync(definition.Id, expectedRevision, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (saveChanges)
+        {
+            return await Records.Where(r => r.Id == id).ExecuteDeleteAsync(cancellationToken) > 0;
+        }
+
+        var record = await Records.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (record is null)
+        {
+            return false;
+        }
+
+        Records.Remove(record);
+        return true;
+    }
+
+    private async Task SaveAsync(Guid id, int expectedRevision, CancellationToken cancellationToken)
+    {
+        if (!saveChanges)
+        {
+            return;
+        }
+
         try
         {
             await context.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new DynamicEndpointConcurrencyException(definition.Id, expectedRevision, null);
+            throw new DynamicEndpointConcurrencyException(id, expectedRevision, null);
         }
     }
-
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) =>
-        await Records.Where(r => r.Id == id).ExecuteDeleteAsync(cancellationToken) > 0;
 
     private static DynamicEndpointRecord Apply(DynamicEndpointDefinition definition, DynamicEndpointRecord record)
     {
@@ -79,5 +113,20 @@ internal sealed class EntityFrameworkDynamicEndpointStore<TContext>(TContext con
             CreatedAt = record.CreatedAt,
             UpdatedAt = record.UpdatedAt,
         };
+    }
+}
+
+public static class DbContextDynamicEndpointExtensions
+{
+    /// <summary>
+    /// A store working on this context (its model must contain the dynamic endpoint table). By default writes are only tracked –
+    /// pass it to <see cref="IDynamicEndpointManager.BeginChanges(IDynamicEndpointStore)"/>, call your <c>SaveChanges</c>, then
+    /// <see cref="DynamicEndpointChangeSet.ApplyAsync"/>. With <paramref name="saveChanges"/> every write saves the context
+    /// right away – inside your transaction when one is open (<c>Database.BeginTransactionAsync()</c>).
+    /// </summary>
+    public static IDynamicEndpointStore GetDynamicEndpointStore(this DbContext context, bool saveChanges = false)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new EntityFrameworkDynamicEndpointStore<DbContext>(context, saveChanges);
     }
 }

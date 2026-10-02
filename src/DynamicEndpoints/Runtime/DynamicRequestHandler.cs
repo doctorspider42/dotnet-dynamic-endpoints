@@ -16,6 +16,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
             ["DynamicEndpointRevision"] = definition.Revision,
         });
 
+        var items = DynamicRequestItems.For(context);
         var filters = context.RequestServices.GetServices<IDynamicEndpointFilter>().ToArray();
         if (filters.Length > 0)
         {
@@ -41,7 +42,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         // Cheap checks first, all reported together; expensive request-level validators only for otherwise valid input.
         var errors = binding.Errors;
         RequestValidator.ValidateStructure(endpoint, binding.Values, errors);
-        await RunParameterValidatorsAsync(context, endpoint, binding, errors);
+        await RunParameterValidatorsAsync(context, endpoint, binding, errors, items);
         if (!errors.HasErrors)
         {
             RequestValidator.ValidateRules(endpoint, binding.Values, errors);
@@ -51,7 +52,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         {
             foreach (var validator in endpoint.Validators)
             {
-                await RunAsync(context, endpoint, validator, null, binding, errors);
+                await RunAsync(context, endpoint, validator, null, binding, errors, items);
             }
         }
 
@@ -65,7 +66,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         }
 
         var processor = context.RequestServices.GetRequiredKeyedService<IDynamicEndpointProcessor>(endpoint.ProcessorName);
-        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context));
+        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context, items));
         await (result ?? Results.Empty).ExecuteAsync(context);
     }
 
@@ -76,15 +77,16 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         BindingResult binding,
         RequestRejection rejection)
     {
-        var result = rejection.StatusCode == StatusCodes.Status400BadRequest
-            ? Results.ValidationProblem(binding.Errors.ToDictionary(), title: rejection.Title)
-            : Results.Problem(statusCode: rejection.StatusCode, title: rejection.Title, detail: rejection.Detail);
+        var errors = binding.Errors.ToList();
+        var factory = context.RequestServices.GetRequiredService<IDynamicErrorResponseFactory>();
+        var result = factory.CreateResponse(new DynamicErrorContext(
+            context, Kind(rejection.Reason), rejection.StatusCode, rejection.Title, rejection.Detail, errors, null));
 
         if (filters.Length > 0)
         {
             var failed = new DynamicValidationFailedContext(
                 context, endpoint.Metadata, rejection.Reason, rejection.StatusCode, rejection.Title, rejection.Detail,
-                binding.Errors.ToList(), binding.Values, result);
+                errors, binding.Values, result);
             foreach (var filter in filters)
             {
                 await filter.OnValidationFailedAsync(failed);
@@ -96,7 +98,16 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         await result.ExecuteAsync(context);
     }
 
-    private static async Task RunParameterValidatorsAsync(HttpContext context, CompiledEndpoint endpoint, BindingResult binding, ValidationErrors errors)
+    private static DynamicErrorKind Kind(DynamicRequestRejection reason) => reason switch
+    {
+        DynamicRequestRejection.InvalidBody => DynamicErrorKind.InvalidBody,
+        DynamicRequestRejection.PayloadTooLarge => DynamicErrorKind.PayloadTooLarge,
+        DynamicRequestRejection.UnsupportedMediaType => DynamicErrorKind.UnsupportedMediaType,
+        _ => DynamicErrorKind.Validation,
+    };
+
+    private static async Task RunParameterValidatorsAsync(
+        HttpContext context, CompiledEndpoint endpoint, BindingResult binding, ValidationErrors errors, DynamicRequestItems items)
     {
         foreach (var parameter in endpoint.Parameters)
         {
@@ -114,7 +125,7 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
                     break;
                 }
 
-                await RunAsync(context, endpoint, validator, definition, binding, errors);
+                await RunAsync(context, endpoint, validator, definition, binding, errors, items);
             }
         }
     }
@@ -125,9 +136,10 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         CompiledValidator validator,
         ParameterDefinition? parameter,
         BindingResult binding,
-        ValidationErrors errors)
+        ValidationErrors errors,
+        DynamicRequestItems items)
     {
         var instance = context.RequestServices.GetRequiredKeyedService<IDynamicValidator>(validator.Name);
-        return instance.ValidateAsync(new DynamicValidationContext(endpoint, validator, parameter, binding.Values, binding.Files, context, errors));
+        return instance.ValidateAsync(new DynamicValidationContext(endpoint, validator, parameter, binding.Values, binding.Files, context, errors, items));
     }
 }

@@ -20,3 +20,12 @@ public interface IDynamicEndpointStore
 
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Prepares the store before definitions are loaded on start-up – e.g. applies database migrations. Initializers are resolved
+/// from a scope and run in registration order; a failure fails the start (unless <see cref="DynamicEndpointsOptions.ThrowOnStartupLoadFailure"/> is off).
+/// </summary>
+public interface IDynamicEndpointStoreInitializer
+{
+    Task InitializeAsync(CancellationToken cancellationToken);
+}

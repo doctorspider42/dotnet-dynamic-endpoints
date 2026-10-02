@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>DynamicEndpoints.Redis</PackageId>
+    <Description>Instant propagation of DynamicEndpoints changes across instances through Redis pub/sub.</Description>
+    <PackageTags>$(PackageTags);redis;pubsub</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DynamicEndpoints\DynamicEndpoints.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="3.3.1" />
+  </ItemGroup>
+
+</Project>

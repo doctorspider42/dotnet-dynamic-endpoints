@@ -52,6 +52,15 @@ public sealed record DynamicEndpointDefinition
     /// <summary>Optional JSON Schema of a successful response – used for documentation only.</summary>
     public JsonObject? ResponseSchema { get; init; }
 
+    /// <summary>
+    /// Example request body shown in the OpenAPI document (keyed by the names used in the request). When empty, it is composed
+    /// from the <see cref="ParameterDefinition.Example"/> values of the body or form parameters.
+    /// </summary>
+    public JsonObject? RequestExample { get; init; }
+
+    /// <summary>Example of a successful response shown in the OpenAPI document.</summary>
+    public JsonNode? ResponseExample { get; init; }
+
     /// <summary>Allows anonymous access even when the application has a fallback authorization policy.</summary>
     public bool AllowAnonymous { get; init; }
 

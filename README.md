@@ -51,11 +51,12 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | | |
 |---|---|
 | 🔥 **Hot endpoints** | Add, change, disable and delete endpoints at runtime. Routing swaps atomically, so a request never sees a half-applied state. |
-| 💾 **Persistent** | Stored with EF Core (any provider) and loaded on start-up. Optimistic concurrency included. |
+| 💾 **Persistent** | Stored with EF Core (any provider) and loaded on start-up. Optimistic concurrency, ready-made migrations, and saving in *your* transaction. |
 | 🧩 **Declarative binding** | Route, query, header, JSON body and form parameters with types, defaults and request names (`X-Tenant-Id` → `tenantId`). |
 | 📎 **File uploads** | `multipart/form-data` with size and content-type limits, streamed by ASP.NET Core. No base64, documented as binary in OpenAPI. |
 | 🛡️ **Four layers of validation** | JSON Schema constraints, custom C# validators, JsonLogic business rules, FluentValidation. |
-| 🪝 **Filters** | Access checks before validation, your own error format, logging and metering of rejected requests. |
+| 🪝 **Filters** | Access checks before validation, logging and metering of rejected requests. |
+| 🧯 **One error format** | `IDynamicErrorResponseFactory` builds validation errors, 401/403/404/405 and exceptions in your own format. |
 | 🌍 **Localized errors** | English and Polish built in, every message overridable, stable error codes for clients. |
 | 📧 **Built-in formats** | E-mail, URI, phone (E.164), IPv4/IPv6, time, date, date-time, UUID. No code needed. |
 | 🪶 **Zero dependencies** | The core depends on ASP.NET Core only. The JSON Schema subset and the JsonLogic engine are built in. |
@@ -63,10 +64,12 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 📜 **OpenAPI 3.1 + Swagger UI** | Generated from the definitions and always current. Business rules show up in the docs. |
 | 🔐 **First-class citizens** | Authorization policies, rate limiting, CORS and endpoint conventions behave the same as on hand-written endpoints. |
 | 🚦 **Safe by design** | No code execution, ReDoS-proof regexes, body and depth limits, reserved prefixes, conflict detection. |
-| 🌐 **Multi-instance** | Polling refresh out of the box, plus a hook for push-based propagation (Redis, a message bus, …). |
+| 🌐 **Multi-instance** | Instant propagation through PostgreSQL `LISTEN/NOTIFY` or Redis pub/sub, with polling as the fallback. |
+| 📣 **Change events** | Created / updated / deleted handlers for audit logs and cache invalidation. |
+| 🧪 **Test kit** | In-memory store for `WebApplicationFactory` and a ready-made test server. No database needed. |
 | 🪄 **Assembly scanning** | `AddFromAssemblyContaining<Program>()` registers every processor, validator and seeder in one call. |
 | 🖥️ **Admin REST API** | One line, `MapDynamicEndpointsAdmin()`, or build your own on top of `IDynamicEndpointManager`. |
-| ✅ **Tested** | Integration tests run on TestServer + SQLite: persistence across restarts, multiple instances, concurrency. |
+| ✅ **Tested** | Integration tests run on TestServer + SQLite, and on real PostgreSQL and Redis containers: persistence, migrations, multiple instances, concurrency. |
 
 ## 🚀 Quick start
 
@@ -258,7 +261,7 @@ builder.Services.AddDynamicEndpoints().AddFluentValidatorsFromAssemblyContaining
 | Custom validators | code validators attached to parameters or to the whole request, with optional configuration |
 | Processing | processor name and configuration (JSON) |
 | Security | allow anonymous, require authorization, authorization policy, rate limiting policy |
-| Docs | response schema (documentation only) |
+| Docs | response schema, request and response examples (documentation only) |
 </details>
 
 <details>
@@ -269,13 +272,39 @@ Every operation validates, persists and swaps the routing table atomically. Inje
 ```csharp
 await manager.CreateAsync(definition);
 await manager.UpdateAsync(definition with { Route = "/v2/orders" });   // optimistic concurrency via Revision
+await manager.UpsertAsync(definition);                                 // create or replace by Id, no revision needed
 await manager.SetEnabledAsync(id, false);
 await manager.DeleteAsync(id);
 var check = await manager.ValidateAsync(definition);                   // dry run
 await manager.ReloadAsync();                                           // re-read the store
 ```
 
+`UpsertAsync` is made for syncing definitions from your own model: it creates the endpoint, or replaces the stored one with the same
+`Id` whatever its revision. Nothing is written (and the revision stays) when the content didn't change.
+
 The sample's `Greetings/` folder shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.
+</details>
+
+<details>
+<summary><b>Saving endpoints in your own transaction: <code>BeginChanges</code></b></summary>
+
+When an endpoint belongs to a row of your own (a feature version, a tenant setting), save both atomically. A change set writes
+through the store you give it and touches the routing table only when you apply it, after your commit:
+
+```csharp
+var changes = manager.BeginChanges(db.GetDynamicEndpointStore());   // EF Core: tracked by your DbContext, not saved
+await changes.UpsertAsync(definition, ct);                          // validated and compiled right away
+db.FeatureVersions.Add(version);
+await db.SaveChangesAsync(ct);                                      // one SaveChanges, one transaction
+await changes.ApplyAsync(ct);                                       // routing table, change handlers, other instances
+```
+
+- **Rollback:** drop the change set. Nothing was routed, so there's nothing to undo.
+- **Concurrency:** a stale revision fails inside *your* `SaveChanges` with `DbUpdateConcurrencyException`.
+- **Explicit transactions:** `manager.BeginChanges(HttpContext.RequestServices)` uses the registered store with *your* scoped
+  DbContext, and its saves join `db.Database.BeginTransactionAsync()`. `db.GetDynamicEndpointStore(saveChanges: true)` does the same
+  for any context.
+- **Route conflicts** are checked across the whole change set too.
 </details>
 
 <details>
@@ -373,8 +402,50 @@ with the default problem response, so a filter that only logs leaves it alone. C
 `context.AddError(path, message, code)`.
 
 The routed endpoint carries the complete definition, so your own middleware doesn't need the store either:
-`context.GetEndpoint()?.Metadata.GetMetadata<DynamicEndpointMetadata>()` gives `Definition`, `ProcessorName`, `Parameters`,
-`HasFiles` and friends.
+`HttpContext.GetDynamicEndpoint()` gives `Definition`, `ProcessorName`, `Parameters`, `FindParameter`, `HasFiles` and friends.
+</details>
+
+<details>
+<summary><b>Handing work on: validators → processor</b></summary>
+
+A validator that already parsed a value, or loaded an entity, hands it on instead of letting the processor repeat the work:
+
+```csharp
+// in a parameter validator
+var document = Decode(context.GetValue<string>());
+context.SetParsedValue(document);               // for the validated parameter (or pass a parameter name)
+context.Items["customer"] = customer;           // anything else, shared by filters, validators and the processor
+
+// in the processor
+var document = request.GetParsedValue<Document>("document");
+var customer = (Customer)request.Items["customer"]!;
+```
+</details>
+
+<details>
+<summary><b>One error format: <code>IDynamicErrorResponseFactory</code></b></summary>
+
+One factory builds every error: validation errors, malformed bodies, 413 and 415. With the middleware it also covers empty 401/403
+responses from authentication and authorization, 404 for unknown routes, 405, empty errors returned by processors, and unhandled
+exceptions. So `UseStatusCodePages` isn't needed any more.
+
+```csharp
+builder.Services.AddDynamicEndpoints().UseErrorResponses(e => Results.Json(new
+{
+    apiVersion = "1.0",
+    error = new { code = e.Kind.ToString(), message = e.Title,                 // Validation, NotFound, Unauthorized, Exception, …
+                  details = e.Errors.Select(x => new { x.Key, x.Code, x.Message }) },
+    requestId = e.RequestId,                                                     // trace id
+}, statusCode: e.StatusCode));                                                   // or UseErrorResponseFactory<MyFactory>()
+
+app.UseDynamicEndpointsErrorResponses(o => o.AppliesTo = c => c.Request.Path.StartsWithSegments("/api"));   // early in the pipeline
+```
+
+- Responses that already have a body are left alone, and `[SkipStatusCodePages]` is respected.
+- Exceptions are logged and answered with a 500. `e.Exception` is there for you, but never in the default response. To let
+  `UseExceptionHandler` handle them instead, set `o.HandleExceptions = false`.
+- Titles are localized like the validation messages. `e.Endpoint` is the dynamic endpoint (`null` for unknown routes).
+- `IDynamicEndpointFilter.OnValidationFailedAsync` still runs afterwards and can replace the result of a single request.
 </details>
 
 <details>
@@ -398,18 +469,30 @@ Keys follow the error codes (`minLength`, `format.email`, `required.query`, `typ
 </details>
 
 <details>
-<summary><b>OpenAPI: security schemes, common headers, hooks</b></summary>
+<summary><b>OpenAPI: security schemes, common headers, examples, hooks</b></summary>
 
 ```csharp
 builder.Services.AddDynamicEndpoints(o =>
 {
-    o.OpenApi.AddApiKey("X-Api-Key");                                    // securitySchemes + global requirement
-    o.OpenApi.AddHeader("X-End-User", "End user the call is made for.");
-    o.OpenApi.AddHeader("Idempotency-Key", "Makes retries safe.", appliesTo: d => d.Method != "GET");
+    o.OpenApi.AddApiKey("X-Api-Key");                                    // securitySchemes + a requirement on every non-anonymous operation
+    o.OpenApi.AddSecurityScheme("Bearer", bearerScheme, appliesTo: d => d.Group == "partners");
+    o.OpenApi.AddHeader("X-End-User", "End user the call is made for.", required: true);
+    o.OpenApi.AddHeader("X-Seat-Id", "Seat of the end user.");
+    o.OpenApi.AddHeader("Idempotency-Key", "Makes retries safe.", appliesTo: d => d.Method != "GET",
+        schema: new JsonObject { ["type"] = "string", ["format"] = "uuid" }, example: "6f9619ff-8b86-d011-b42d-00cf4fc964ff");
     o.OpenApi.ConfigureOperation = (operation, definition) => { /* x-extensions, extra responses */ };
     o.OpenApi.ConfigureDocument = document => { /* servers, your error schema */ };
 });
+
+DynamicEndpoint.Post("/orders")
+    .FromBody("sku", p => p.Required().Example("A-1"))       // examples compose the request example…
+    .WithRequestExample(new { sku = "A-1", quantity = 2 })   // …or set it by hand
+    .WithResponseExample(new { id = 7, status = "accepted" });
 ```
+
+- **Headers** are real header parameters of each operation, so client generators produce arguments for them.
+- **Security requirements** are attached to each operation. Endpoints with `AllowAnonymous` get none.
+- **Examples:** parameter examples show up on query, header and route parameters and in the request body example.
 </details>
 
 <details>
@@ -424,7 +507,8 @@ builder.Services.AddDynamicEndpoints(o =>
     o.MaxRequestBodySize = 1024 * 1024;           // JSON bodies, bytes
     o.MaxFormBodySize = 30 * 1024 * 1024;         // form bodies with all their files, bytes
     o.MaxJsonDepth = 32;
-    o.RefreshInterval = TimeSpan.FromSeconds(30); // multi-instance polling
+    o.RefreshInterval = TimeSpan.FromSeconds(30); // multi-instance polling (the fallback when a change notifier is used)
+    o.InstanceId = "api-1";                       // identifies this instance in change notifications (unique by default)
     o.ThrowOnStartupLoadFailure = true;
     o.ConfigureEndpoint = (builder, definition) => { /* extra metadata */ };
     o.OpenApi.Title = "My dynamic API";
@@ -438,12 +522,93 @@ app.MapDynamicEndpoints().RequireRateLimiting("api");   // conventions for all d
 <details>
 <summary><b>Multiple instances</b></summary>
 
-Each instance keeps its own routing table:
+Each instance keeps its own routing table. A change notifier tells the others right away, and polling catches whatever a
+notifier missed:
 
-- **Polling:** `RefreshInterval` re-reads the store at a fixed interval.
-- **Push:** call `IDynamicEndpointManager.ReloadAsync()` from your own signal (Redis pub/sub, a message bus).
+```csharp
+builder.Services.AddDynamicEndpoints(o => o.RefreshInterval = TimeSpan.FromMinutes(5))   // fallback only
+    .UseEntityFrameworkStore<AppDbContext>()
+    .UsePostgreSqlChangeNotifications(connectionString);    // DynamicEndpoints.PostgreSql: LISTEN/NOTIFY, no extra infrastructure
+ // .UseRedisChangeNotifications("redis:6379");             // DynamicEndpoints.Redis: pub/sub
+ // .UseChangeNotifier<MyServiceBusNotifier>();             // or your own IDynamicEndpointChangeNotifier
+```
+
+- **Instant:** every change is published after it was applied. The other instances reload at once, and bursts are coalesced.
+- **Resilient:** listeners reconnect on their own and reload after every reconnect, in case something was missed while
+  disconnected. An instance ignores its own messages.
+- **Push by hand:** `IDynamicEndpointManager.ReloadAsync()` still works from any signal of yours.
 - **Visibility:** the admin list reports `Pending` for changes this instance hasn't picked up yet.
 - **Conflicting writes:** a stale write from another instance is rejected by the database concurrency token.
+</details>
+
+<details>
+<summary><b>Change events: audit, cache invalidation</b></summary>
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .AddChangeHandler<AuditChangeHandler>()                   // scoped, run in registration order
+    .OnChanged((change, ct) => cache.RemoveAsync(change.Id.ToString(), ct));
+
+public sealed class AuditChangeHandler(AuditLog audit) : IDynamicEndpointChangeHandler
+{
+    public Task OnChangedAsync(DynamicEndpointChangedEvent change, CancellationToken ct) =>
+        change.Origin == DynamicEndpointChangeOrigin.Local     // once, on the instance that made the change
+            ? audit.WriteAsync(change.Kind, change.Id, change.Previous, change.Definition, ct)
+            : Task.CompletedTask;
+}
+```
+
+- `Kind` is `Created`, `Updated` (including enable/disable) or `Deleted`. `Previous` and `Definition` are the definitions before
+  and after the change.
+- `Origin` is `Local` for changes made through this instance's manager, raised once. It's `Remote` for changes picked up by a
+  reload, raised on every other instance, which is what per-instance caches need.
+- Handlers run after the routing table was updated. Exceptions are logged and don't undo the change.
+</details>
+
+<details>
+<summary><b>EF Core: migrations</b></summary>
+
+**Your own DbContext** (recommended): add the table to your model, and your migrations create and evolve it.
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    modelBuilder.ApplyDynamicEndpointsConfiguration();   // or ApplyConfiguration(new DynamicEndpointRecordConfiguration(table, schema))
+```
+
+```bash
+dotnet ef migrations add AddDynamicEndpoints
+```
+
+**The bundled `DynamicEndpointsDbContext`** ships its own provider-independent migrations:
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .UseEntityFrameworkStore(o => o.UseNpgsql(connectionString), migrateOnStartup: true);
+// or apply them in your deployment step: await db.Database.MigrateAsync();
+```
+
+A table created earlier with `EnsureCreated` is adopted into the migration history on the first `migrateOnStartup`. With your own
+context, add the table to an empty initial migration the usual EF Core way. `MigrateOnStartup<TContext>()` applies your own
+context's migrations on start-up, and any `IDynamicEndpointStoreInitializer` runs before definitions are loaded.
+</details>
+
+<details>
+<summary><b>Testing: <code>DynamicEndpoints.Testing</code></b></summary>
+
+```csharp
+// Your application, without its database: in-memory store, no migrations, no notifier, no polling.
+await using var factory = new WebApplicationFactory<Program>()
+    .WithInMemoryDynamicEndpoints(b => b.AddProcessor("fake-crm", _ => Results.Ok(new { id = 1 })));
+await factory.AddDynamicEndpointAsync(DynamicEndpoint.Get("/customers/{id}").HandledBy("fake-crm").FromRoute("id"));
+var response = await factory.CreateClient().GetAsync("/customers/1");
+
+// Or just your processors and validators, without the application.
+await using var server = await DynamicEndpointsTestServer.StartAsync(b => b.AddProcessor<OrderLookupProcessor>());
+await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<OrderLookupProcessor>().FromRoute("id"));
+```
+
+`services.UseInMemoryDynamicEndpoints()` does the same in your own `ConfigureTestServices`. To test several instances, share one
+`InMemoryDynamicEndpointStore` and one `InMemoryDynamicEndpointChangeNotifier` between servers.
 </details>
 
 <details>
@@ -477,6 +642,9 @@ Each instance keeps its own routing table:
 | `DynamicEndpoints` | core: routing, binding, validation engines, manager, admin API, OpenAPI. **Zero third-party dependencies** |
 | `DynamicEndpoints.EntityFrameworkCore` | persistence with EF Core |
 | `DynamicEndpoints.FluentValidation` | FluentValidation validators as dynamic validators |
+| `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
+| `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
+| `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
 
 ## 🧪 Sample app
 
@@ -519,9 +687,14 @@ dotnet test DynamicEndpoints.slnx
 src/DynamicEndpoints                       core library
 src/DynamicEndpoints.EntityFrameworkCore   EF Core store
 src/DynamicEndpoints.FluentValidation      FluentValidation integration
+src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
+src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
+src/DynamicEndpoints.Testing               test helpers
 samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
-tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite)
+tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
 ```
+
+Tests marked `[DockerFact]` start PostgreSQL and Redis containers (Testcontainers) and are skipped when Docker isn't available.
 
 ## 🗺️ Roadmap
 
@@ -533,7 +706,8 @@ tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLit
 - [x] Built-in string formats
 - [x] Continuous delivery: every push to `main` publishes a new NuGet version
 - [ ] Draft → publish workflow with version history and rollback
-- [ ] Redis pub/sub change notifier package
+- [x] Instant change propagation: PostgreSQL `LISTEN/NOTIFY` and Redis pub/sub
+- [x] Change events, transactional change sets, EF Core migrations, test kit
 - [ ] Admin UI as a reusable package
 - [ ] OpenTelemetry metrics per dynamic endpoint
 
@@ -546,6 +720,9 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | `DynamicEndpoints` | ASP.NET Core shared framework only |
 | `DynamicEndpoints.EntityFrameworkCore` | `Microsoft.EntityFrameworkCore.Relational` (MIT) |
 | `DynamicEndpoints.FluentValidation` | [FluentValidation](https://github.com/FluentValidation/FluentValidation) (Apache-2.0) |
+| `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
+| `DynamicEndpoints.Redis` | [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) (MIT) |
+| `DynamicEndpoints.Testing` | `Microsoft.AspNetCore.Mvc.Testing` (MIT) |
 
 ## 🤝 Contributing
 

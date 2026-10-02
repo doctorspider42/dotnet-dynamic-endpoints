@@ -13,20 +13,40 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyDynamicEndpointsConfiguration(); // adds the DynamicEndpoints table
+        // or: modelBuilder.ApplyConfiguration(new DynamicEndpointRecordConfiguration("endpoints", "api"));
 }
 
-builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
+builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString));
 builder.Services.AddDynamicEndpoints().UseEntityFrameworkStore<AppDbContext>();
 ```
 
-Create the table with your migrations as usual.
+Create the table with your migrations as usual (`dotnet ef migrations add AddDynamicEndpoints`). `.MigrateOnStartup<AppDbContext>()`
+applies them on start-up if you want that.
 
-## …or the bundled context
+## …or the bundled context, with its own migrations
 
 ```csharp
 builder.Services.AddDynamicEndpoints()
-    .UseEntityFrameworkStore(o => o.UseNpgsql(connectionString)); // DynamicEndpointsDbContext
+    .UseEntityFrameworkStore(o => o.UseNpgsql(connectionString), migrateOnStartup: true); // DynamicEndpointsDbContext
 ```
+
+The migrations have no provider-specific column types, so they work with SQL Server, PostgreSQL, SQLite, MySQL, … A table
+created earlier with `EnsureCreated` is adopted into the migration history. If you'd rather migrate in your deployment pipeline,
+leave `migrateOnStartup` off and call `Database.MigrateAsync()` on `DynamicEndpointsDbContext` there.
+
+## Save endpoints together with your own data
+
+```csharp
+var changes = manager.BeginChanges(db.GetDynamicEndpointStore());   // tracked by db, not saved
+await changes.UpsertAsync(definition, ct);
+db.FeatureVersions.Add(version);
+await db.SaveChangesAsync(ct);                                      // one SaveChanges, one transaction
+await changes.ApplyAsync(ct);                                       // now the routes change
+```
+
+If you drop the change set instead of saving, nothing is routed. A stale revision fails inside your `SaveChanges` with
+`DbUpdateConcurrencyException`. If you use explicit transactions, `manager.BeginChanges(HttpContext.RequestServices)` saves
+through your scoped DbContext, inside `db.Database.BeginTransactionAsync()`.
 
 ## How it is stored
 

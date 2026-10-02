@@ -9,6 +9,58 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Instant propagation across instances.** After a change, the instance publishes it through an `IDynamicEndpointChangeNotifier`,
+  and the other instances reload right away. Bursts are coalesced, and listeners reload after every reconnect. Polling
+  (`RefreshInterval`) stays as the fallback. New packages:
+  - `DynamicEndpoints.PostgreSql`: `UsePostgreSqlChangeNotifications(connectionString)`, through `LISTEN/NOTIFY` with a keep-alive
+    check of the listening connection.
+  - `DynamicEndpoints.Redis`: `UseRedisChangeNotifications("redis:6379")`, through pub/sub. It can also reuse the `IConnectionMultiplexer` from DI.
+  - Your own transport: `UseChangeNotifier<T>()`. `options.InstanceId` identifies the sender.
+- **Change events.** `AddChangeHandler<T>()` / `OnChanged((change, ct) => …)` run after endpoints were created, updated (including
+  enable/disable) or deleted, with the definitions before and after. `Origin` is `Local` once, on the instance that made the change
+  (for audit logs), and `Remote` on every instance that picked it up by a reload (for cache invalidation).
+- **Upsert.** `IDynamicEndpointManager.UpsertAsync` creates an endpoint, or replaces the stored one with the same `Id` without a
+  revision check. When the content didn't change, nothing is written and the revision stays.
+- **Change sets in your own transaction.** `manager.BeginChanges(store)` stages creates, updates, upserts, deletes and enable/disable
+  through the given store, and `ApplyAsync()` updates the routing table after your commit. With EF Core,
+  `db.GetDynamicEndpointStore()` only tracks the writes, so your own `SaveChanges` stores the endpoint and your data atomically.
+  `BeginChanges(HttpContext.RequestServices)` shares the scoped DbContext and its transaction instead. Route conflicts are checked
+  across the whole set.
+- **EF Core migrations.** The bundled `DynamicEndpointsDbContext` ships provider-independent migrations.
+  `UseEntityFrameworkStore(…, migrateOnStartup: true)` applies them on start-up and adopts tables created earlier with `EnsureCreated`.
+  For your own context there's `DynamicEndpointRecordConfiguration` (an `IEntityTypeConfiguration`) and `MigrateOnStartup<TContext>()`.
+  `IDynamicEndpointStoreInitializer` / `AddStoreInitializer<T>()` run any preparation before definitions are loaded.
+- **One error format.** `IDynamicErrorResponseFactory` (`UseErrorResponseFactory<T>()` or `UseErrorResponses(context => …)`) builds
+  every error response: validation, invalid body, 413 and 415. The context has `Kind`, `StatusCode`, localized `Title`, `Errors` with
+  codes, `Endpoint` and `RequestId`. With `app.UseDynamicEndpointsErrorResponses()` the same factory also formats empty
+  401/403/404/405 responses (also for static endpoints and unknown routes) and unhandled exceptions (500, logged, never exposed).
+  This replaces `UseStatusCodePages`. Filters still run afterwards and can override single responses.
+- **Handing work on.** Validators call `context.SetParsedValue(value)`, and processors read it with `request.GetParsedValue<T>(name)`.
+  `Items` is a per-request bag shared by filters, validators and the processor.
+- `HttpContext.GetDynamicEndpoint()` returns the endpoint's metadata with its complete definition, for your own middleware.
+  `DynamicValidationContext.Metadata` returns the same.
+- **OpenAPI:**
+  - Security requirements are attached to each operation, and `AllowAnonymous` endpoints get none. `AddSecurityScheme` and `AddApiKey`
+    take an `appliesTo` filter.
+  - Request examples are composed from parameter examples, or set with `RequestExample` / `WithRequestExample(…)`. Responses take
+    `ResponseExample` / `WithResponseExample(…)`.
+  - Parameters and common headers (`AddHeader(…, example: …)`) carry `example`.
+- `DynamicEndpoints.Testing`: `WebApplicationFactory<T>.WithInMemoryDynamicEndpoints(…)` / `services.UseInMemoryDynamicEndpoints()`
+  swap the store for an in-memory one and drop migrations, notifiers and polling. `AddDynamicEndpointAsync(…)` adds an endpoint.
+  `DynamicEndpointsTestServer` runs endpoints without your application, and `InMemoryDynamicEndpointChangeNotifier` lets you test
+  several instances.
+
+### Changed
+
+- `AddSecurityScheme` / `AddApiKey` attach their requirement to every operation (`OpenApi.OperationSecurity`) instead of adding a
+  document-level `security` entry. Requirements you add to `OpenApi.SecurityRequirements` yourself are still document-level, and
+  anonymous endpoints now opt out of them with `security: []`.
+- Operations with a security requirement document a `401` response.
+- `IDynamicEndpointManager` has the new members `UpsertAsync` and `BeginChanges`. Your own implementations of the interface (e.g.
+  decorators) need them too.
+
 ## [0.2.0] - 2026-10-01
 
 ### Added

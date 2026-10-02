@@ -42,10 +42,14 @@ public sealed class DynamicEndpointsOptions
 
     /// <summary>
     /// When set, every instance re-reads definitions from the store at this interval –
-    /// the simplest way to propagate changes across a multi-instance deployment.
-    /// Call <see cref="IDynamicEndpointManager.ReloadAsync"/> yourself for push based propagation (e.g. Redis pub/sub).
+    /// the simplest way to propagate changes across a multi-instance deployment. With a change notifier
+    /// (<c>UseChangeNotifier</c>, e.g. PostgreSQL <c>LISTEN/NOTIFY</c> or Redis pub/sub) changes arrive immediately and polling
+    /// is only the fallback for lost messages, so a long interval (minutes) is enough.
     /// </summary>
     public TimeSpan? RefreshInterval { get; set; }
+
+    /// <summary>Identifies this instance in change notifications, so it ignores its own. Unique per process by default.</summary>
+    public string InstanceId { get; set; } = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
 
     /// <summary>Fail application start when definitions cannot be loaded from the store. Default <c>true</c>.</summary>
     public bool ThrowOnStartupLoadFailure { get; set; } = true;
@@ -73,8 +77,17 @@ public sealed class DynamicEndpointsOpenApiOptions
     /// <summary>Security schemes added to <c>components.securitySchemes</c>, e.g. via <see cref="AddApiKey"/>.</summary>
     public IDictionary<string, JsonObject> SecuritySchemes { get; } = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
 
-    /// <summary>Document-level security requirements (<c>{ "ApiKey": [] }</c>), applied to every operation.</summary>
+    /// <summary>
+    /// Document-level security requirements (<c>{ "ApiKey": [] }</c>). Prefer <see cref="OperationSecurity"/> (what
+    /// <see cref="AddSecurityScheme"/> uses) – client generators see requirements attached to each operation more reliably.
+    /// </summary>
     public IList<JsonObject> SecurityRequirements { get; } = new List<JsonObject>();
+
+    /// <summary>
+    /// Security requirements attached to each operation (or those selected by <see cref="DynamicOpenApiSecurityRequirement.AppliesTo"/>).
+    /// Endpoints with <see cref="DynamicEndpointDefinition.AllowAnonymous"/> get none.
+    /// </summary>
+    public IList<DynamicOpenApiSecurityRequirement> OperationSecurity { get; } = new List<DynamicOpenApiSecurityRequirement>();
 
     /// <summary>Headers documented on every operation (or the ones selected by <see cref="DynamicOpenApiHeader.AppliesTo"/>).</summary>
     public IList<DynamicOpenApiHeader> Headers { get; } = new List<DynamicOpenApiHeader>();
@@ -85,22 +98,36 @@ public sealed class DynamicEndpointsOpenApiOptions
     /// <summary>Last chance to change the whole document (servers, extra schemas, …) – runs after all operations were generated.</summary>
     public Action<JsonObject>? ConfigureDocument { get; set; }
 
-    /// <summary>Adds a security scheme; with <paramref name="required"/> it is also required by every operation.</summary>
-    public DynamicEndpointsOpenApiOptions AddSecurityScheme(string name, JsonObject scheme, bool required = true)
+    /// <summary>
+    /// Adds a security scheme; with <paramref name="required"/> it is also attached to every operation – or to those matching
+    /// <paramref name="appliesTo"/> – except anonymous ones.
+    /// </summary>
+    public DynamicEndpointsOpenApiOptions AddSecurityScheme(
+        string name,
+        JsonObject scheme,
+        bool required = true,
+        Func<DynamicEndpointDefinition, bool>? appliesTo = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(scheme);
         SecuritySchemes[name] = scheme;
         if (required)
         {
-            SecurityRequirements.Add(new JsonObject { [name] = new JsonArray() });
+            OperationSecurity.Add(new DynamicOpenApiSecurityRequirement(new JsonObject { [name] = new JsonArray() }) { AppliesTo = appliesTo });
         }
 
         return this;
     }
 
-    /// <summary>Documents an API key sent in a header (e.g. <c>X-Api-Key</c>) and requires it for every operation.</summary>
-    public DynamicEndpointsOpenApiOptions AddApiKey(string headerName = "X-Api-Key", string schemeName = "ApiKey", string? description = null)
+    /// <summary>
+    /// Documents an API key sent in a header (e.g. <c>X-Api-Key</c>) and attaches it to every non-anonymous operation
+    /// (or to those matching <paramref name="appliesTo"/>).
+    /// </summary>
+    public DynamicEndpointsOpenApiOptions AddApiKey(
+        string headerName = "X-Api-Key",
+        string schemeName = "ApiKey",
+        string? description = null,
+        Func<DynamicEndpointDefinition, bool>? appliesTo = null)
     {
         var scheme = new JsonObject { ["type"] = "apiKey", ["in"] = "header", ["name"] = headerName };
         if (description is not null)
@@ -108,7 +135,7 @@ public sealed class DynamicEndpointsOpenApiOptions
             scheme["description"] = description;
         }
 
-        return AddSecurityScheme(schemeName, scheme);
+        return AddSecurityScheme(schemeName, scheme, required: true, appliesTo);
     }
 
     /// <summary>Documents a header on every operation, or on those matching <paramref name="appliesTo"/>.</summary>
@@ -117,9 +144,17 @@ public sealed class DynamicEndpointsOpenApiOptions
         string? description = null,
         bool required = false,
         Func<DynamicEndpointDefinition, bool>? appliesTo = null,
-        JsonObject? schema = null)
+        JsonObject? schema = null,
+        JsonNode? example = null)
     {
-        Headers.Add(new DynamicOpenApiHeader(name) { Description = description, Required = required, AppliesTo = appliesTo, Schema = schema });
+        Headers.Add(new DynamicOpenApiHeader(name)
+        {
+            Description = description,
+            Required = required,
+            AppliesTo = appliesTo,
+            Schema = schema,
+            Example = example,
+        });
         return this;
     }
 }
@@ -136,6 +171,18 @@ public sealed class DynamicOpenApiHeader(string name)
     /// <summary>JSON Schema of the value. Default <c>{ "type": "string" }</c>.</summary>
     public JsonObject? Schema { get; init; }
 
+    /// <summary>Example value, e.g. a UUID for <c>Idempotency-Key</c>.</summary>
+    public JsonNode? Example { get; init; }
+
     /// <summary>Operations the header is documented on; all when <c>null</c>.</summary>
+    public Func<DynamicEndpointDefinition, bool>? AppliesTo { get; init; }
+}
+
+/// <summary>A security requirement (<c>{ "ApiKey": [] }</c>) attached to dynamic endpoint operations.</summary>
+public sealed class DynamicOpenApiSecurityRequirement(JsonObject requirement)
+{
+    public JsonObject Requirement { get; } = requirement ?? throw new ArgumentNullException(nameof(requirement));
+
+    /// <summary>Operations the requirement is attached to; all non-anonymous ones when <c>null</c>.</summary>
     public Func<DynamicEndpointDefinition, bool>? AppliesTo { get; init; }
 }
