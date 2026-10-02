@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\DynamicEndpoints.FluentValidation\DynamicEndpoints.FluentValidation.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.PostgreSql\DynamicEndpoints.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.Redis\DynamicEndpoints.Redis.csproj" />
+    <ProjectReference Include="..\..\src\DynamicEndpoints.Sql\DynamicEndpoints.Sql.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.Testing\DynamicEndpoints.Testing.csproj" />
   </ItemGroup>
 

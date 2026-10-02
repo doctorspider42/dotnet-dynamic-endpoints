@@ -15,6 +15,17 @@ and the project uses [Semantic Versioning](https://semver.org/).
   request built from parameter examples, defaults, allowed values and constraints, plus ready-made curl, HTTPie and C# `HttpClient`
   snippets. Required documented headers and the credentials of the security schemes appear as placeholders. In code:
   `IDynamicEndpointSnippetGenerator`.
+- **Built-in processors** (opt-in, typed configuration validated on save): `AddBuiltInProcessors()` or one by one:
+  - `http-forward` (`AddHttpForwardProcessor()`): forwards to another service through `IHttpClientFactory` with a URL template
+    (values URL-encoded, no placeholders in the host), headers with `{config:…}` secrets, forwarded request headers, body modes or a
+    body template, timeout, and the upstream response relayed or mapped by a `responseTemplate`. `502`/`504` on upstream failures.
+  - `webhook` (`AddWebhookProcessor()`): JSON webhooks with retries and exponential back-off (`Retry-After` honoured), HMAC-SHA256
+    signatures from a configuration secret, a stable `X-Webhook-Delivery` id, and optional background delivery.
+  - `response` (`AddResponseTemplateProcessor()`): responses rendered from JSON or text templates (`{{name}}`, `{{a.b[0]}}`).
+  - `DynamicHttpProcessorOptions`: named HTTP client, `AllowedHosts` against SSRF (checked on save and per call), response size limit.
+- **`DynamicEndpoints.Sql`**, a new package: `AddSqlQueryProcessor(…)` registers `sql-query`, a read-only SQL processor for any
+  ADO.NET provider. Request values are always bound as parameters; single `SELECT`/`WITH` statements only, data-changing keywords
+  rejected on save and before every run, every query in a rolled-back transaction. See the package README for the security notes.
 - **Response caching per endpoint.** `Caching` in the definition (`.Cached(…)` / `.WithCaching(…)`): `Cache-Control` max age and
   visibility (private by default for endpoints that require authorization), `noStore`, ETags with `304 Not Modified`, and
   server-side output caching through ASP.NET Core `OutputCache` (`outputCacheSeconds`, `outputCachePolicy`, `varyByQuery`,

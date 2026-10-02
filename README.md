@@ -353,6 +353,46 @@ builder.Services.AddDynamicEndpoints()
 </details>
 
 <details>
+<summary><b>Built-in processors: HTTP forward, webhook, response template, SQL</b></summary>
+
+Batteries included, but opt-in: nothing is registered until you ask for it. Their configuration is typed and validated on save
+(unknown properties are errors).
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .AddBuiltInProcessors(o => o.AllowedHosts.Add("*.internal.example.com"))   // http-forward, webhook, response
+    .AddSqlQueryProcessor(_ => new NpgsqlConnection(readOnlyConnectionString));  // DynamicEndpoints.Sql package
+
+builder.Services.AddHttpClient("DynamicEndpoints").AddStandardResilienceHandler();  // optional: the processors' named client
+```
+
+| Processor | Configuration (excerpt) | |
+|---|---|---|
+| `http-forward` | `url` (`https://backend/orders/{id}`), `method`, `headers`, `forwardHeaders`, `body`, `bodyTemplate`, `timeoutSeconds`, `responseTemplate`, `statusCode` | proxies to another service through `IHttpClientFactory` and relays (or maps) its response |
+| `webhook` | `url`, `payload`, `retries`, `retryDelayMilliseconds`, `timeoutSeconds`, `signingSecretConfigurationKey`, `background` | JSON webhook with exponential back-off, HMAC-SHA256 signature and an `X-Webhook-Delivery` id |
+| `response` | `body` (JSON template) or `text`, `statusCode`, `contentType`, `headers` | mock APIs, fixed answers, request-to-response mapping |
+| `sql-query` | `query` with `@name` placeholders, `result` (`Rows`/`Row`/`Value`), `maxRows`, `connection` | read-only SQL, see [DynamicEndpoints.Sql](src/DynamicEndpoints.Sql/README.md) |
+
+```json
+{ "processor": "http-forward", "processorConfig": {
+    "url": "https://crm.internal.example.com/customers/{id}",
+    "headers": { "X-Api-Key": "{config:Crm:ApiKey}" },
+    "responseTemplate": { "id": "{{id}}", "name": "{{response.data.fullName}}" } } }
+```
+
+- **Templates:** URLs use `{name}` and every value is URL-encoded, so a parameter can't add path segments or change the host
+  (placeholders in scheme, host and port are rejected). JSON and text templates use `{{name}}`, `{{address.city}}`,
+  `{{response.items[0]}}`; a string that is only a placeholder keeps the JSON type. Values are inserted, never evaluated.
+- **Secrets** stay out of definitions: header values reference configuration with `{config:Section:Key}` (checked on save), the
+  webhook secret is a configuration key.
+- **SSRF:** admins choose the targets. Restrict them with `AllowedHosts` when admins aren't fully trusted. It's checked on save and
+  on every call.
+- **Upstream failures:** timeouts are `504`, connection errors `502`, responses above `MaxResponseBodySize` (10 MB) `502`. Webhooks
+  retry network errors, timeouts, `408`, `429` and `5xx` (honouring `Retry-After`), and answer `502` once they give up. With
+  `background: true` they answer `202` right away and deliver from an in-memory queue (lost on shutdown).
+</details>
+
+<details>
 <summary><b>File uploads &amp; forms</b></summary>
 
 `Form` parameters read `multipart/form-data` or `application/x-www-form-urlencoded` bodies. Text fields are converted like query
@@ -709,6 +749,7 @@ await server.AddEndpointAsync(DynamicEndpoint.Get("/orders/{id}").HandledBy<Orde
 | `DynamicEndpoints.FluentValidation` | FluentValidation validators as dynamic validators |
 | `DynamicEndpoints.PostgreSql` | instant multi-instance propagation through `LISTEN/NOTIFY` |
 | `DynamicEndpoints.Redis` | instant multi-instance propagation through Redis pub/sub |
+| `DynamicEndpoints.Sql` | read-only, parameterized SQL query processor for any ADO.NET provider |
 | `DynamicEndpoints.Testing` | in-memory store for `WebApplicationFactory`, test server, in-memory notifier |
 
 ## 🧪 Sample app
@@ -754,6 +795,7 @@ src/DynamicEndpoints.EntityFrameworkCore   EF Core store
 src/DynamicEndpoints.FluentValidation      FluentValidation integration
 src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
+src/DynamicEndpoints.Sql                   read-only SQL query processor
 src/DynamicEndpoints.Testing               test helpers
 samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
@@ -787,6 +829,7 @@ DynamicEndpoints is licensed under the [MIT License](LICENSE). Use it in commerc
 | `DynamicEndpoints.FluentValidation` | [FluentValidation](https://github.com/FluentValidation/FluentValidation) (Apache-2.0) |
 | `DynamicEndpoints.PostgreSql` | [Npgsql](https://github.com/npgsql/npgsql) (PostgreSQL License) |
 | `DynamicEndpoints.Redis` | [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) (MIT) |
+| `DynamicEndpoints.Sql` | ASP.NET Core shared framework only (bring your ADO.NET provider) |
 | `DynamicEndpoints.Testing` | `Microsoft.AspNetCore.Mvc.Testing` (MIT) |
 
 ## 🤝 Contributing
