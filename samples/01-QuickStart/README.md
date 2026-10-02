@@ -18,7 +18,8 @@ seeder. It is the [README quick start](../../README.md#-quick-start) and what `d
 dotnet run --project samples/01-QuickStart
 ```
 
-The definitions are stored in `quickstart.db` in the directory you started it from. Delete the file to start over.
+The definitions are stored in `quickstart.db` in the sample's folder (the working directory of `dotnet run`). Delete the
+file to start over: the seeder only seeds an empty store.
 
 ## Click around
 

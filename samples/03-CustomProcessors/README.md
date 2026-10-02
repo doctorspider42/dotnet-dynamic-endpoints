@@ -23,7 +23,7 @@ that hands its work on, and a management API of your own on `IDynamicEndpointMan
 dotnet run --project samples/03-CustomProcessors
 ```
 
-Definitions and notes in `custom-processors.db` (working directory). Panel: <http://localhost:5103/admin/>, Swagger UI:
+Definitions and notes in `custom-processors.db` (in the sample's folder, the working directory of `dotnet run`). Panel: <http://localhost:5103/admin/>, Swagger UI:
 <http://localhost:5103/swagger> (the *Admin API and greetings API* document has the custom API).
 
 ## Click around

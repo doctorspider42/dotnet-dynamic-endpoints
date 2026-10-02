@@ -24,7 +24,7 @@ for every error (`IDynamicErrorResponseFactory`) and messages in English or Poli
 dotnet run --project samples/02-Validation
 ```
 
-Definitions in `validation.db` (working directory). The panel is at <http://localhost:5102/admin/>, Swagger UI at
+Definitions in `validation.db` (in the sample's folder, the working directory of `dotnet run`). The panel is at <http://localhost:5102/admin/>, Swagger UI at
 <http://localhost:5102/swagger>.
 
 ## Click around

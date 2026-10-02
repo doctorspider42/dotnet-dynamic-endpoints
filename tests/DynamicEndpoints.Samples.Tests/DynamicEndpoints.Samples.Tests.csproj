@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\samples\01-QuickStart\DynamicEndpoints.Samples.QuickStart.csproj" Aliases="QuickStart" />
     <ProjectReference Include="..\..\samples\02-Validation\DynamicEndpoints.Samples.Validation.csproj" Aliases="Validation" />
     <ProjectReference Include="..\..\samples\03-CustomProcessors\DynamicEndpoints.Samples.CustomProcessors.csproj" Aliases="CustomProcessors" />
+    <ProjectReference Include="..\..\samples\04-BuiltInProcessors\DynamicEndpoints.Samples.BuiltInProcessors.csproj" Aliases="BuiltInProcessors" />
   </ItemGroup>
 
 </Project>
