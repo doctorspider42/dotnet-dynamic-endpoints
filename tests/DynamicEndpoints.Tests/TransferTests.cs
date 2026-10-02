@@ -9,6 +9,26 @@ namespace DynamicEndpoints.Tests;
 public sealed class TransferTests
 {
     [Fact]
+    public async Task Unpublished_drafts_are_neither_exported_nor_matched_on_import()
+    {
+        await using var host = await TestHost.StartAsync();
+        var published = await host.Manager.CreateAsync(DynamicEndpoint.Get("/published").HandledBy("echo"));
+        await host.Manager.SaveDraftAsync(new DynamicEndpointDraft { Definition = published with { Description = "draft change" } });
+        var draftOnly = await host.Manager.SaveDraftAsync(new DynamicEndpointDraft { Definition = DynamicEndpoint.Get("/draft-only").HandledBy("echo") });
+
+        var export = DynamicEndpointExport.FromJson(await host.Client.GetStringAsync("/admin/endpoints/export"));
+        var exported = Assert.Single(export.Endpoints);
+        Assert.Equal(published.Id, exported.Id);
+        Assert.Null(exported.Description);
+
+        // Syncing the export leaves the draft alone instead of trying to delete an endpoint the store doesn't have.
+        var result = await host.Services.GetRequiredService<IDynamicEndpointTransfer>().ImportAsync(export, new() { Mode = DynamicEndpointImportMode.Sync });
+        Assert.True(result.Succeeded);
+        Assert.DoesNotContain(result.Items, i => i.Action == DynamicEndpointImportAction.Delete);
+        Assert.NotNull(await host.Manager.GetDraftAsync(draftOnly.EndpointId));
+    }
+
+    [Fact]
     public async Task Export_is_stable_sorted_and_round_trips()
     {
         await using var host = await TestHost.StartAsync();

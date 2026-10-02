@@ -91,8 +91,8 @@ dynamic-endpoints push acme.yaml --sync --url https://api.example.com/api/tenant
 - The tenant admin API needs the built-in transfer and OpenAPI importer: if you replaced `IDynamicEndpointTransfer` or
   `IDynamicEndpointOpenApiImporter`, their routes fail rather than leak other tenants' endpoints.
 - The [admin panel](admin-ui.md#with-multi-tenancy) can sit on top of a tenant admin API whose tenant comes from the resolvers.
-- **Caching and rate limits:** with `FromHeader()`, add the tenant header to `varyByHeader` of output-cached endpoints; rate
-  limits count per endpoint, so each tenant endpoint has its own budget
+- **Caching and rate limits:** the output cache keeps the responses of tenant endpoints apart (only shared endpoints whose response
+  depends on the tenant need the tenant header in `varyByHeader`); rate limits count per endpoint, so each tenant endpoint has its own budget
   ([caching & rate limits](caching-and-rate-limits.md#with-multi-tenancy)).
 
 ## OpenAPI

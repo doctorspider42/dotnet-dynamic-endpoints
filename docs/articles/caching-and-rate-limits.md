@@ -61,7 +61,7 @@ DynamicEndpoint.Get("/quotes")
 
 - **Budgets are per endpoint.** Every tenant endpoint has its own counters, so tenants on the same route don't share a limit.
   A shared endpoint has one budget for all tenants – partition by `Header` or `User` to give each client its own.
-- **Output caching and the tenant header.** The output cache key is built from the request (path, query, vary headers), not from
-  the endpoint that answered. With `FromHost()` or `FromRoutePrefix()` the tenant is part of the key already; with
-  `FromHeader("X-Tenant-Id")`, add the header to `varyByHeader`, or tenants with the same route can be served each other's cached
-  responses. The same goes for shared endpoints whose response depends on `request.Tenant`.
+- **Output caching keeps tenants apart.** The cache key includes the endpoint that answered, so tenants with their own endpoint on
+  the same route never get each other's cached responses, whatever resolver finds the tenant. A *shared* endpoint is one endpoint
+  for every tenant: when its response depends on `request.Tenant`, add the tenant header to `varyByHeader` (with `FromHeader()`;
+  host and route prefix are part of the key already).

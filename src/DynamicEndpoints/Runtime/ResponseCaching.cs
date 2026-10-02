@@ -145,6 +145,24 @@ internal static partial class ResponseCaching
                 VaryByHeaderNames = headers,
                 VaryByQueryKeys = query,
             });
+
+        // Tenants can have their own endpoint on the same route (and the same URL): the endpoint that answered is part of the key.
+        builder.Metadata.Add(new VaryByEndpointPolicy(d.Id));
+    }
+
+    private sealed class VaryByEndpointPolicy(Guid id) : IOutputCachePolicy
+    {
+        private readonly string _value = id.ToString("N");
+
+        public ValueTask CacheRequestAsync(OutputCacheContext context, CancellationToken cancellation)
+        {
+            context.CacheVaryByRules.VaryByValues["dynamic-endpoint"] = _value;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask ServeFromCacheAsync(OutputCacheContext context, CancellationToken cancellation) => ValueTask.CompletedTask;
+
+        public ValueTask ServeResponseAsync(OutputCacheContext context, CancellationToken cancellation) => ValueTask.CompletedTask;
     }
 
     /// <summary>Executes the processor result with caching headers and, for ETags, a buffered body.</summary>

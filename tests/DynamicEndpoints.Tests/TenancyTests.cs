@@ -277,6 +277,26 @@ public sealed class TenancyTests
     }
 
     [Fact]
+    public async Task Output_cache_keeps_the_responses_of_tenants_on_the_same_route_apart()
+    {
+        await using var host = await TestHost.StartAsync(configure: b =>
+            {
+                b.UseMultiTenancy(t => t.FromHeader());
+                b.Services.AddOutputCache();
+            },
+            configureApp: app => app.UseOutputCache());
+        var caching = new DynamicEndpointCaching { OutputCacheSeconds = 60 };
+        await host.Manager.CreateAsync(DynamicEndpoint.Get("/greet/{name}").HandledBy<GreetingProcessor>(new { greeting = "Hi" })
+            .FromRoute("name").WithCaching(caching).Build() with { Tenant = "acme" });
+        await host.Manager.CreateAsync(DynamicEndpoint.Get("/greet/{name}").HandledBy<GreetingProcessor>(new { greeting = "Ahoy" })
+            .FromRoute("name").WithCaching(caching).Build() with { Tenant = "globex" });
+
+        Assert.Equal("Hi, Ann!", await (await GetAsync(host, "/greet/Ann", "acme")).Content.ReadAsStringAsync());
+        Assert.Equal("Ahoy, Ann!", await (await GetAsync(host, "/greet/Ann", "globex")).Content.ReadAsStringAsync());
+        Assert.Equal("Hi, Ann!", await (await GetAsync(host, "/greet/Ann", "acme")).Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Tenants_are_persisted_without_a_schema_change()
     {
         var path = Path.Combine(Path.GetTempPath(), $"de-tenancy-{Guid.NewGuid():N}.db");

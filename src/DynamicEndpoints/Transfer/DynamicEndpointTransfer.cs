@@ -34,7 +34,7 @@ internal sealed class DynamicEndpointTransfer(
 
     public async Task<DynamicEndpointExport> ExportAsync(IReadOnlyCollection<Guid>? ids = null, CancellationToken cancellationToken = default)
     {
-        var definitions = (await manager.ListAsync(cancellationToken)).Select(s => s.Definition);
+        var definitions = await PublishedAsync(cancellationToken);
         if (ids is { Count: > 0 })
         {
             var selected = ids.ToHashSet();
@@ -51,7 +51,7 @@ internal sealed class DynamicEndpointTransfer(
     {
         ArgumentNullException.ThrowIfNull(import);
         options ??= new DynamicEndpointImportOptions();
-        var current = (await manager.ListAsync(cancellationToken)).Select(s => s.Definition).ToList();
+        var current = (await PublishedAsync(cancellationToken)).ToList();
         var plan = Plan(import, options.Mode, current);
 
         // Rehearsal: the real change set logic against a store that only remembers the writes.
@@ -88,6 +88,10 @@ internal sealed class DynamicEndpointTransfer(
             plan.Count(p => p.Item.Action == DynamicEndpointImportAction.Delete));
         return Result(plan, options, succeeded);
     }
+
+    // Drafts that were never published aren't stored endpoints: not exported, not matched, not deleted by a sync.
+    private async Task<IEnumerable<DynamicEndpointDefinition>> PublishedAsync(CancellationToken cancellationToken) =>
+        (await manager.ListAsync(cancellationToken)).Where(s => s.Status != DynamicEndpointStatus.Draft).Select(s => s.Definition);
 
     private static DynamicEndpointImportResult Result(List<PlannedChange> plan, DynamicEndpointImportOptions options, bool succeeded) => new()
     {

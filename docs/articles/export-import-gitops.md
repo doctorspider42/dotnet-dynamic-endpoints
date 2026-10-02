@@ -117,6 +117,8 @@ A typical pipeline:
 
 ## Together with the rest
 
+- **Drafts:** exports contain published endpoints only. Endpoints that exist only as a draft aren't exported, matched or deleted by
+  a sync, and drafts of published endpoints stay drafts.
 - **History:** an import is a series of ordinary changes, so every created or updated endpoint gets a revision, and a bad push
   can be [rolled back](drafts-and-history.md) endpoint by endpoint. Imports raise [change events](change-events.md), land in the
   [audit log](audit-log.md) and reach the other instances.
