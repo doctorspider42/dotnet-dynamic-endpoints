@@ -132,7 +132,7 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
         group.MapPost("/snippets", (DynamicEndpointDefinition definition, string? baseUrl, string? tenant, HttpContext context,
                 IDynamicEndpointSnippetGenerator snippets) =>
                 ResolveBaseUrl(context, baseUrl) is { } url
-                    ? TypedResults.Ok(snippets.Generate(definition, url, SnippetTenant(context, tenant)))
+                    ? TypedResults.Ok(snippets.Generate(OwnTenant(context, definition), url, SnippetTenant(context, tenant)))
                     : BadBaseUrl())
             .WithSummary("Generates an example request and snippets for an unsaved definition (editor preview).")
             .Produces<DynamicEndpointSnippets>();
@@ -400,6 +400,10 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
     internal const string AdminTenantKey = "DynamicEndpoints.AdminTenant";
 
     // A tenant's admin API always shows requests of its tenant; otherwise ?tenant=, else the definition's own tenant.
+    // In a tenant admin API an unsaved definition belongs to the API's tenant, whatever its body says – like when it is saved.
+    private static DynamicEndpointDefinition OwnTenant(HttpContext http, DynamicEndpointDefinition definition) =>
+        http.Items.TryGetValue(AdminTenantKey, out var scoped) && scoped is string own ? definition with { Tenant = own } : definition;
+
     private static string? SnippetTenant(HttpContext http, string? tenant) =>
         http.Items.TryGetValue(AdminTenantKey, out var scoped) && scoped is string own ? own
         : string.IsNullOrWhiteSpace(tenant) ? null

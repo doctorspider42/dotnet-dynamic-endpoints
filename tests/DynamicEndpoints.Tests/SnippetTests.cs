@@ -138,6 +138,11 @@ public sealed class SnippetTests
             new { method = "GET", route = "/draft" });
         request = (await preview.Content.ReadFromJsonAsync<JsonObject>())!["request"]!;
         Assert.Equal("http://x/t/initech/draft", request["url"]!.GetValue<string>());
+        preview = await host.Client.PostAsJsonAsync("/admin/tenants/initech/endpoints/snippets?baseUrl=http://x",
+            new { method = "GET", route = "/draft", tenant = "globex" });
+        request = (await preview.Content.ReadFromJsonAsync<JsonObject>())!["request"]!;
+        Assert.Equal("http://x/t/initech/draft", request["url"]!.GetValue<string>());
+        Assert.Equal("initech", Header(request, "X-Tenant"));
         Assert.Contains("-H 'X-Tenant: acme'", (await host.Client.GetFromJsonAsync<JsonObject>(
             $"/admin/tenants/acme/endpoints/{own.Id}/snippets"))!["curl"]!.GetValue<string>());
     }
