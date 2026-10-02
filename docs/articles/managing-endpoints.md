@@ -19,4 +19,4 @@ Drafts, history and rollback are on the manager too (`SaveDraftAsync`, `PublishA
 `RollbackAsync`, …), see [Drafts, history & rollback](drafts-and-history.md). Bulk export and import go through
 `IDynamicEndpointTransfer` ([GitOps](export-import-gitops.md)).
 
-The sample's `Greetings/` folder shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.
+The `Greetings/` folder of the [custom processors sample](samples.md) (`samples/03-CustomProcessors`) shows a purpose-built API on top of the manager: `POST /api/greetings {"slug":"pirate","greeting":"Ahoy"}` publishes `GET /greetings/pirate/{name}` immediately.

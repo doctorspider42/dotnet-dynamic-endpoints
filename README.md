@@ -21,7 +21,7 @@
 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/) •
 [API reference](https://doctorspider42.github.io/dotnet-dynamic-endpoints/api/DynamicEndpoints.html) •
 [Changelog](CHANGELOG.md) •
-[Sample app](#-sample-app)
+[Samples](#-samples)
 
 <img src="docs/images/admin-list.jpg" alt="Admin panel with runtime-defined endpoints" width="820">
 
@@ -172,7 +172,7 @@ The full documentation, with an API reference generated from the XML docs, is at
 | **Defining endpoints** | [Definition model](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/definition-model.html) · [Validation: four layers, zero recompiles](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/validation.html) · [Processors, validators, seeders & assembly scanning](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/processors-and-validators.html) · [Built-in processors: HTTP forward, webhook, response, SQL](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/built-in-processors.html) · [CRUD on EF Core entities](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/ef-crud.html) · [File uploads & forms](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/file-uploads.html) · [Handing work on](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/handing-work-on.html) |
 | **Managing endpoints** | [`IDynamicEndpointManager`](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/managing-endpoints.html) · [Change sets in your transaction](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/change-sets.html) · [Admin REST API](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/admin-api.html) · [Admin panel](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/admin-ui.html) · [Drafts, history & rollback](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/drafts-and-history.html) · [Export, import & GitOps](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/export-import-gitops.html) · [Import from OpenAPI](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/openapi-import.html) · [Change events](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/change-events.html) · [Audit log](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/audit-log.html) · [Multi-tenancy](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multi-tenancy.html) |
 | **Requests & responses** | [Filters](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/filters.html) · [One error format](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/error-responses.html) · [Localized error messages](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/localization.html) · [OpenAPI](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/openapi.html) · [Caching & rate limits](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/caching-and-rate-limits.html) |
-| **Hosting** | [Options](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/options.html) · [Multiple instances](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multiple-instances.html) · [EF Core & migrations](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/ef-core.html) · [Testing](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/testing.html) · [Metrics & tracing](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/telemetry.html) · [Sample app, Aspire & live demo](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/aspire-and-demo.html) · [Analyzers](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/analyzers.html) · [Benchmarks](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/benchmarks.html) |
+| **Hosting** | [Options](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/options.html) · [Multiple instances](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/multiple-instances.html) · [EF Core & migrations](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/ef-core.html) · [Testing](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/testing.html) · [Metrics & tracing](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/telemetry.html) · [Samples](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/samples.html) · [Showcase, Aspire & live demo](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/aspire-and-demo.html) · [Analyzers](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/analyzers.html) · [Benchmarks](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/benchmarks.html) |
 | **Safety** | [Security](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/security.html) · [Limitations](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/limitations.html) |
 
 The pages live in [`docs/`](docs/) and build with `dotnet tool restore && dotnet docfx docs/docfx.json` (output in `docs/_site`).
@@ -228,31 +228,39 @@ Short job on a dev laptop (Ryzen 7 PRO 5850U, Windows 11, .NET 10.0.8): request 
 three runs), allocations were stable. Run them yourself with
 `dotnet run -c Release --project tests/DynamicEndpoints.Benchmarks -- --filter * --job short`. More in [Benchmarks](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/benchmarks.html).
 
-## 🧪 Sample app
+## 🧪 Samples
+
+Small apps in [`samples/`](samples/), one feature area each, easy to read top to bottom. Every one runs on its own with SQLite – no
+Docker – and has the admin panel at `/admin/` and Swagger UI at `/swagger`, a `README.md` that says what to click and call, and
+a `.http` file with the requests.
 
 ```bash
-dotnet run --project samples/Showcase
+dotnet run --project samples/01-QuickStart      # → http://localhost:5101/admin/
 ```
 
-- 🖥️ **Admin panel:** `http://localhost:5118/admin/`, from the `DynamicEndpoints.AdminUI` package. Editor with processor forms,
-  caching and rate limits, drafts and history, export/import, OpenAPI import, audit log and a "Try" console with snippets.
-- 🏢 **Tenants:** tenant picked by the `X-Tenant` header; acme's own panel at `http://localhost:5118/admin/tenants/acme/`.
-- 📜 **Swagger UI:** `http://localhost:5118/swagger`, with the *Dynamic endpoints* and *Admin API* documents.
-- 🧩 **Processors:** `echo`, `template`, `calculator`, `collection` and an inline `clock`, plus the built-in `http-forward`,
-  `webhook`, `response` and `sql-query`.
-- 🌱 **Seeded demos:** `GET /products/{sku}` (cached, rate-limited, with a quota), `GET /reports/documents` (SQL),
-  `GET /welcome` (only for `X-Tenant: acme`), `POST /contacts` (built-in formats). Seeded into an empty store only.
-- 🛡️ **Validators:** `nip` (C#), `unique-value` (C#, DB lookup), `iban` and `booking-request` (FluentValidation).
-- 📝 **Audit log:** the latest changes at `GET /api/admin/endpoints/audit`.
-- 👋 **Custom management API:** `Greetings/` builds its own API on the injected `IDynamicEndpointManager`.
+| Feature | Sample | What to look at |
+|---|---|---|
+| 🚀 The minimum | [`01-QuickStart`](samples/01-QuickStart) · 5101 | the quick start above as an app: SQLite store, admin API and panel, Swagger UI, a typed processor, a seeder |
+| 🛡️ Validation | [`02-Validation`](samples/02-Validation) · 5102 | constraints and formats, C# and FluentValidation validators, JsonLogic rules, error codes, `IDynamicErrorResponseFactory`, Polish messages |
+| ⚙️ Your own processors | [`03-CustomProcessors`](samples/03-CustomProcessors) · 5103 | typed processors with configuration, DI and DB access, a filter, file uploads, handing work on, a management API on `IDynamicEndpointManager` |
+| 🔋 Built-in processors | [`04-BuiltInProcessors`](samples/04-BuiltInProcessors) · 5104 | `http-forward`, `webhook`, `response`, `sql-query` – against a fake upstream in the same app, so it works offline |
+| 🧾 CRUD on EF Core entities | [`05-EfCrud`](samples/05-EfCrud) · 5105 | the allowlist, an interceptor, ETags with `If-Match`, scaffolding, `HandledByCrud<T>` – without tenancy |
+| 🏢 Multi-tenancy | [`06-MultiTenancy`](samples/06-MultiTenancy) · 5106 | `X-Tenant`, shared and tenant endpoints, a tenant's admin API and panel, OpenAPI per tenant, tenant rows in ef-crud, SQL connections per tenant |
+| 📥 Import from OpenAPI | [`07-OpenApiImport`](samples/07-OpenApiImport) · 5107 | a petstore in mock mode, imported from code on start, a processor per operation or tag, re-import with sync |
+| 🔁 GitOps | [`08-GitOps`](samples/08-GitOps) · 5108 | `endpoints.yaml`, export/import with dry runs, YAML, `gitops.ps1` / `gitops.sh` with the `dynamic-endpoints` CLI |
+| 🗂️ Drafts, history, audit | [`09-DraftsHistoryAudit`](samples/09-DraftsHistoryAudit) · 5109 | drafts, scheduled publishing, diffs, rollback, an audit log in your own table |
+| ⏱️ Caching & rate limits | [`10-CachingAndRateLimits`](samples/10-CachingAndRateLimits) · 5110 | `Cache-Control`, ETags/304, output cache, rate limits and quotas, the 429 through the error factory |
+| 📈 Observability | [`11-Observability`](samples/11-Observability) · 5111 | OpenTelemetry metrics and traces per endpoint with the console exporter |
+| 🎪 Everything together | [`Showcase`](samples/Showcase) · 5118 | all features in one app – the app of the Aspire AppHost, docker compose and the live demo container |
 
 ```bash
-dotnet run --project samples/DynamicEndpoints.AppHost                 # .NET Aspire: 2 replicas, PostgreSQL, Redis, dashboard
+dotnet run --project samples/DynamicEndpoints.AppHost                 # .NET Aspire: the showcase ×2, PostgreSQL, Redis, dashboard
 docker compose -f samples/docker-compose.yml up --build               # live demo: 2 instances + PostgreSQL + Redis + nginx
 ```
 
 The Aspire dashboard shows the `dynamic_endpoints.*` metrics per endpoint and the binding, validation and processor spans. More in
-[Sample app, Aspire & live demo](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/aspire-and-demo.html).
+[Samples](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/samples.html) and
+[Showcase, Aspire & live demo](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/aspire-and-demo.html).
 
 ## 🚢 Releasing
 
@@ -265,8 +273,8 @@ creates a GitHub Release with generated notes.
 | `major.minor` | `<VersionPrefix>` in `Directory.Build.props`. Bump it by hand |
 | `patch` | the last `vX.Y.*` tag + 1. Automatic, gap-free, resets after a prefix bump |
 
-Pushes that only touch `README.md`, `docs/`, `samples/` or the benchmarks are not released. The documentation site is
-published to GitHub Pages by `.github/workflows/docs.yml`.
+Pushes that only touch `README.md`, `docs/`, `samples/` (and their tests) or the benchmarks are not released. The
+documentation site is published to GitHub Pages by `.github/workflows/docs.yml`.
 
 Release notes come from [`CHANGELOG.md`](CHANGELOG.md). Add entries under **[Unreleased]** together with your change, and the
 workflow moves them under the released version. Pushes without entries get auto-generated notes only, and no bot commit.
@@ -293,10 +301,12 @@ src/DynamicEndpoints.Yaml                  YAML text format
 src/DynamicEndpoints.Cli                   dynamic-endpoints .NET tool
 src/DynamicEndpoints.Testing               test helpers
 src/DynamicEndpoints.Templates             dotnet new project template
-samples/Showcase                           showcase: admin panel, Swagger UI, SQLite (or PostgreSQL), Dockerfile
-samples/DynamicEndpoints.AppHost           .NET Aspire: the sample ×2 with PostgreSQL, Redis and the dashboard
+samples/01-QuickStart … 11-Observability  focused sample apps, one feature area each (SQLite, admin panel, Swagger UI)
+samples/Showcase                           every feature in one app: SQLite (or PostgreSQL), Dockerfile of the live demo
+samples/DynamicEndpoints.AppHost           .NET Aspire: the showcase ×2 with PostgreSQL, Redis and the dashboard
 samples/DynamicEndpoints.ServiceDefaults   Aspire service defaults incl. the dynamic endpoint metrics
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
+tests/DynamicEndpoints.Samples.Tests       smoke tests of the focused samples (TestServer + SQLite)
 tests/DynamicEndpoints.Analyzers.Tests     analyzer tests
 tests/DynamicEndpoints.Benchmarks          BenchmarkDotNet benchmarks (not run by dotnet test)
 docs/                                      documentation site (docfx)

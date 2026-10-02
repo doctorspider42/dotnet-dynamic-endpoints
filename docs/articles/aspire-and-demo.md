@@ -1,6 +1,10 @@
-# Sample app, Aspire & live demo
+# Showcase, Aspire & live demo
 
-## The sample
+> [!TIP]
+> Learning a feature? The [focused samples](samples.md) – `samples/01-QuickStart` to `samples/11-Observability` – show one
+> feature area each, in a small app that reads top to bottom. The showcase below has everything switched on at once.
+
+## The showcase
 
 ```bash
 dotnet run --project samples/Showcase
@@ -14,7 +18,7 @@ dotnet run --project samples/Showcase
   them with a policy that checks the user belongs to the tenant). OpenAPI per tenant at `/openapi/{tenant}/dynamic.json`.
 - 📜 **Swagger UI:** `http://localhost:5118/swagger`, with the *Dynamic endpoints* and *Admin API* documents.
 - 🧩 **Processors:** `echo`, `template`, `calculator`, `collection` (a JSON document store in SQLite) and an inline `clock`, plus the
-  [built-in](built-in-processors.md) `http-forward`, `webhook`, `response` and `sql-query` (on the sample's own database).
+  [built-in](built-in-processors.md) `http-forward`, `webhook`, `response` and `sql-query` (on the showcase's own database).
 - 🛡️ **Validators:** `nip` (C#), `unique-value` (C#, DB lookup), `iban` and `booking-request` (FluentValidation). `POST /contacts` shows the built-in formats.
 - 🔁 **YAML:** `AddYamlFormat()`, so export and import speak YAML in the panel, the admin API and the CLI.
 - ⏱️ **Caching & rate limits:** `AddRateLimiter()` / `UseRateLimiter()` and `AddOutputCache()` / `UseOutputCache()` are always on.
@@ -33,8 +37,8 @@ It runs on SQLite by default. With a `dynamicendpoints` connection string it use
 string it propagates changes through Redis ([multiple instances](multiple-instances.md)).
 
 > [!NOTE]
-> The seeder only seeds an empty store. If you ran an older version of the sample, delete its SQLite database
-> (`dynamic-endpoints.db` in the directory you started it from) to get the new demo endpoints.
+> The seeder only seeds an empty store. If you ran an older version of the showcase, delete its SQLite database
+> (`dynamic-endpoints.db` in `samples/Showcase`, the working directory of `dotnet run`) to get the new demo endpoints.
 
 ## …with .NET Aspire
 
@@ -42,11 +46,12 @@ string it propagates changes through Redis ([multiple instances](multiple-instan
 dotnet run --project samples/DynamicEndpoints.AppHost      # needs Docker or Podman
 ```
 
-The AppHost runs the sample in **two replicas** on **PostgreSQL** (definitions, history, drafts) with **Redis** change
+The AppHost runs the showcase in **two replicas** on **PostgreSQL** (definitions, history, drafts) with **Redis** change
 notifications: change an endpoint in the panel and both replicas serve it at once. `DynamicEndpoints.ServiceDefaults` wires
 OpenTelemetry with `AddDynamicEndpointsInstrumentation()` ([telemetry](telemetry.md)), so the Aspire dashboard shows
 `dynamic_endpoints.requests`, `…validation.failures` by layer and `…processor.duration` per endpoint, and traces with the
-binding, validation and processor spans.
+binding, validation and processor spans. Without Docker, the [`11-Observability` sample](samples.md) shows the same
+telemetry setup on its own, printed by the OpenTelemetry console exporter.
 
 ## …as a container (live demo)
 

@@ -198,6 +198,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
   *Scaffold CRUD* wizard with a dry run, shown when `/info` reports `crud`.
 - Sample: a `Product` entity with a tenant column exposed through `ef-crud`, an interceptor, and scaffolded `/shop/products`
   endpoints (the local SQLite demo database is recreated when it has no products table).
+- **Focused sample apps per feature**, each small, runnable on its own with `dotnet run` and SQLite (no Docker), with the admin
+  panel, Swagger UI, a `README.md` and a `.http` file: `samples/01-QuickStart`, `02-Validation`, `03-CustomProcessors`,
+  `04-BuiltInProcessors` (with a fake upstream in the same app), `05-EfCrud`, `06-MultiTenancy`, `07-OpenApiImport`, `08-GitOps`
+  (with `gitops.ps1` / `gitops.sh` running the CLI), `09-DraftsHistoryAudit`, `10-CachingAndRateLimits` and `11-Observability`.
+  The combined sample is now `samples/Showcase` (`DynamicEndpoints.Samples.Showcase`), still the app of the Aspire AppHost, docker
+  compose and the Dockerfile. `tests/DynamicEndpoints.Samples.Tests` has a smoke test per sample, and the docs a
+  [Samples](docs/articles/samples.md) overview.
 
 ### Changed
 
