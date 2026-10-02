@@ -771,6 +771,29 @@ dotnet run --project samples/DynamicEndpoints.Sample
 - 🌱 **Seeding:** `SampleEndpointsSeeder` seeds the demo endpoints on the first start.
 - 👋 **Custom management API:** `Greetings/` builds its own API on the injected `IDynamicEndpointManager`.
 
+### …with .NET Aspire
+
+```bash
+dotnet run --project samples/DynamicEndpoints.AppHost      # needs Docker or Podman
+```
+
+The AppHost runs the sample in **two replicas** on **PostgreSQL** (definitions, history, drafts) with **Redis** change
+notifications: change an endpoint in the panel and both replicas serve it at once. `DynamicEndpoints.ServiceDefaults` wires
+OpenTelemetry with `AddDynamicEndpointsInstrumentation()`, so the Aspire dashboard shows `dynamic_endpoints.requests`,
+`…validation.failures` by layer and `…processor.duration` per endpoint, and traces with the binding, validation and processor spans.
+
+### …as a container (live demo)
+
+```bash
+docker build -f samples/DynamicEndpoints.Sample/Dockerfile -t dynamic-endpoints-sample .
+docker run --rm -p 8080:8080 dynamic-endpoints-sample                # SQLite in /data
+docker compose -f samples/docker-compose.yml up --build              # 2 instances + PostgreSQL + Redis + nginx
+```
+
+The image runs in **demo mode** (`Demo__Enabled`): a rate limit per client IP (`Demo__RequestsPerMinute`, 120) and a reset to
+the seeded endpoints every hour (`Demo__ResetInterval`). The admin API stays open, so don't put anything private in there.
+`/health` and `/alive` are there for the platform's probes, and `OTEL_EXPORTER_OTLP_ENDPOINT` turns on telemetry export.
+
 ## 🚢 Releasing
 
 **Every push to `main` is a release.** `.github/workflows/release.yml` builds, tests, packs and publishes to NuGet through
@@ -804,7 +827,9 @@ src/DynamicEndpoints.PostgreSql            LISTEN/NOTIFY change notifier
 src/DynamicEndpoints.Redis                 Redis pub/sub change notifier
 src/DynamicEndpoints.OpenTelemetry         OpenTelemetry registration
 src/DynamicEndpoints.Testing               test helpers
-samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite
+samples/DynamicEndpoints.Sample            demo app: admin panel, Swagger UI, SQLite (or PostgreSQL), Dockerfile
+samples/DynamicEndpoints.AppHost           .NET Aspire: the sample ×2 with PostgreSQL, Redis and the dashboard
+samples/DynamicEndpoints.ServiceDefaults   Aspire service defaults incl. the dynamic endpoint metrics
 tests/DynamicEndpoints.Tests               integration tests (TestServer + SQLite; PostgreSQL and Redis in Docker)
 ```
 

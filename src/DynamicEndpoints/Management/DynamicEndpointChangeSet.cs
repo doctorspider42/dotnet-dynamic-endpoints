@@ -173,7 +173,7 @@ public sealed class DynamicEndpointChangeSet
             var saved = new DynamicEndpointDraft
             {
                 Definition = d,
-                PublishAt = draft.PublishAt,
+                PublishAt = draft.PublishAt?.ToUniversalTime(), // some providers (Npgsql) only store UTC offsets
                 Comment = string.IsNullOrWhiteSpace(draft.Comment) ? null : draft.Comment.Trim(),
                 CreatedAt = existing?.CreatedAt ?? now,
                 UpdatedAt = now,

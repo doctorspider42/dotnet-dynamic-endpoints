@@ -35,6 +35,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
   Schemas) and copies requests as curl, HTTPie or C# `HttpClient` code. The sample uses the package instead of its own `wwwroot`.
 - `DynamicEndpoints.OpenTelemetry` package: `AddDynamicEndpointsInstrumentation()` for `MeterProviderBuilder` and `TracerProviderBuilder`.
 
+- **.NET Aspire sample.** `samples/DynamicEndpoints.AppHost` runs the sample in two replicas on PostgreSQL with Redis change
+  notifications, and `samples/DynamicEndpoints.ServiceDefaults` sends the per-endpoint metrics and traces to the Aspire dashboard.
+  The sample picks PostgreSQL and Redis up from the `dynamicendpoints` and `redis` connection strings.
+- **Container for a live demo.** `samples/DynamicEndpoints.Sample/Dockerfile` and `samples/docker-compose.yml` (two instances,
+  PostgreSQL, Redis, nginx). A demo mode (`Demo__Enabled`) adds a rate limit per client and resets the endpoints every hour.
+
 ### Changed
 
 - `IDynamicEndpointManager` has new members for drafts, history and rollback. Your own implementations of the interface (e.g.

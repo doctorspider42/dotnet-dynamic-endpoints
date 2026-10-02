@@ -27,8 +27,13 @@ internal static class SampleDatabase
             }
         }
 
-        // EnsureCreated doesn't add tables to an existing database. A demo database from before history and drafts
-        // existed is simply recreated (and seeded again).
+        // EnsureCreated doesn't add tables to an existing database. A local SQLite demo database from before history and
+        // drafts existed is simply recreated (and seeded again).
+        if (!db.Database.IsSqlite())
+        {
+            return;
+        }
+
         try
         {
             await db.Set<DynamicEndpointDraftRecord>().AnyAsync();
