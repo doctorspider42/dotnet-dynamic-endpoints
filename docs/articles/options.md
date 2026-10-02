@@ -11,6 +11,7 @@ builder.Services.AddDynamicEndpoints(o =>
     o.MaxJsonDepth = 32;
     o.RefreshInterval = TimeSpan.FromSeconds(30); // multi-instance polling (the fallback when a change notifier is used)
     o.InstanceId = "api-1";                       // identifies this instance in change notifications (unique by default)
+    o.ScheduledPublishInterval = TimeSpan.FromSeconds(10);  // publishes due drafts; null turns it off (call PublishDueAsync yourself)
     o.ThrowOnStartupLoadFailure = true;
     o.ConfigureEndpoint = (builder, definition) => { /* extra metadata */ };
     o.OpenApi.Title = "My dynamic API";

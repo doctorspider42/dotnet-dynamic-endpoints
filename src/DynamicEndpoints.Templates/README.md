@@ -30,5 +30,5 @@ cd MyApi && dotnet run
 | `--DynamicEndpointsVersion` | the template's release line, e.g. `0.3.*` | Version (or floating range) of the DynamicEndpoints packages. |
 | `--no-swagger` | `false` | Leave out Swagger UI. |
 
-📖 [Documentation](https://github.com/doctorspider42/dotnet-dynamic-endpoints#readme) ·
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/project-template.html) ·
 📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)

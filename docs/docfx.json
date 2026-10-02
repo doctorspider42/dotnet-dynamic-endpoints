@@ -7,11 +7,15 @@
           "src": "../src",
           "files": [
             "DynamicEndpoints/DynamicEndpoints.csproj",
+            "DynamicEndpoints.AdminUI/DynamicEndpoints.AdminUI.csproj",
             "DynamicEndpoints.EntityFrameworkCore/DynamicEndpoints.EntityFrameworkCore.csproj",
             "DynamicEndpoints.FluentValidation/DynamicEndpoints.FluentValidation.csproj",
+            "DynamicEndpoints.OpenTelemetry/DynamicEndpoints.OpenTelemetry.csproj",
             "DynamicEndpoints.PostgreSql/DynamicEndpoints.PostgreSql.csproj",
             "DynamicEndpoints.Redis/DynamicEndpoints.Redis.csproj",
-            "DynamicEndpoints.Testing/DynamicEndpoints.Testing.csproj"
+            "DynamicEndpoints.Sql/DynamicEndpoints.Sql.csproj",
+            "DynamicEndpoints.Testing/DynamicEndpoints.Testing.csproj",
+            "DynamicEndpoints.Yaml/DynamicEndpoints.Yaml.csproj"
           ]
         }
       ],

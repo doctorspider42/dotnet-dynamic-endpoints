@@ -17,6 +17,12 @@ Dynamic endpoint Updated GET /orders/{id} (0199…, tenant acme, revision 4) by 
 It is built on [change events](change-events.md) with origin `Local`, so each change is audited once, on the instance that made
 it. Changes picked up from other instances are not audited again.
 
+Publishing a [draft](drafts-and-history.md), a rollback and every endpoint of an [import](export-import-gitops.md) are audited like
+any other change; saving or discarding a draft is not, since nothing is routed. The audit log and the revision history
+complement each other: the history keeps every revision for diffs and rollbacks, the audit log adds who made the change, the
+request's trace id and the instance. Audit diffs address list items by index (`parameters[0].maxLength`), revision diffs by name
+(`parameters[quantity].maximum`).
+
 ## Entries
 
 | Field | |

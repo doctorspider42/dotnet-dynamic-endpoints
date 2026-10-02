@@ -17,3 +17,6 @@ await changes.ApplyAsync(ct);                                       // routing t
   DbContext, and its saves join `db.Database.BeginTransactionAsync()`. `db.GetDynamicEndpointStore(saveChanges: true)` does the same
   for any context.
 - **Route conflicts** are checked across the whole change set too.
+- **Drafts:** `SaveDraftAsync`, `DiscardDraftAsync`, `PublishAsync` and `RollbackAsync` are on the change set too, so a draft
+  can be saved or published together with your own data ([drafts, history & rollback](drafts-and-history.md)). With EF Core the
+  revision is saved in the same `SaveChanges` as the definition.

@@ -13,3 +13,5 @@ builder.Services.AddDynamicEndpoints()
 - **Names:** come from `[DynamicProcessor("…")]` / `[DynamicValidator("…")]` or the type name (`OrderLookupProcessor` → `order-lookup`).
 - **Idempotent scanning:** a type that is already registered is skipped.
 - **Single entry point:** register one processor and set `options.DefaultProcessor`.
+- **Ready-made processors:** HTTP forward, webhook, response templates and read-only SQL are opt-in, see
+  [Built-in processors](built-in-processors.md).

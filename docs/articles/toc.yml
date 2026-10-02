@@ -12,6 +12,8 @@
       href: validation.md
     - name: Processors, validators & seeders
       href: processors-and-validators.md
+    - name: Built-in processors
+      href: built-in-processors.md
     - name: File uploads & forms
       href: file-uploads.md
     - name: Handing work on
@@ -24,6 +26,14 @@
       href: change-sets.md
     - name: Admin REST API
       href: admin-api.md
+    - name: Admin panel
+      href: admin-ui.md
+    - name: Drafts, history & rollback
+      href: drafts-and-history.md
+    - name: Export, import & GitOps
+      href: export-import-gitops.md
+    - name: Import from OpenAPI
+      href: openapi-import.md
     - name: Change events
       href: change-events.md
     - name: Audit log
@@ -40,6 +50,8 @@
       href: localization.md
     - name: OpenAPI
       href: openapi.md
+    - name: Caching & rate limits
+      href: caching-and-rate-limits.md
 - name: Hosting
   items:
     - name: Options
@@ -50,6 +62,10 @@
       href: ef-core.md
     - name: Testing
       href: testing.md
+    - name: Metrics & tracing
+      href: telemetry.md
+    - name: Sample app, Aspire & live demo
+      href: aspire-and-demo.md
     - name: Analyzers
       href: analyzers.md
     - name: Benchmarks

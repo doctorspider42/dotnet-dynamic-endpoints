@@ -4,6 +4,8 @@
 keep endpoint definitions in Git and list, export, diff and push them through the admin REST API (`MapDynamicEndpointsAdmin`).
 Made for CI: meaningful exit codes, credentials from environment variables, JSON output on request.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/LICENSE)
+
 ```bash
 dotnet tool install --global DynamicEndpoints.Cli
 
@@ -55,3 +57,6 @@ YAML files are converted locally, so the server doesn't need `DynamicEndpoints.Y
     DYNAMIC_ENDPOINTS_URL: ${{ vars.ADMIN_URL }}
     DYNAMIC_ENDPOINTS_TOKEN: ${{ secrets.ADMIN_TOKEN }}
 ```
+
+📖 [Documentation](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/export-import-gitops.html) ·
+📝 [Changelog](https://github.com/doctorspider42/dotnet-dynamic-endpoints/blob/main/CHANGELOG.md)
