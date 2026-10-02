@@ -28,3 +28,9 @@ A table created earlier with `EnsureCreated` is adopted into the migration histo
 Definitions that existed before the history tables start their history with their published revision. With your own
 context, add the table to an empty initial migration the usual EF Core way. `MigrateOnStartup<TContext>()` applies your own
 context's migrations on start-up, and any `IDynamicEndpointStoreInitializer` runs before definitions are loaded.
+
+## Your entities as endpoints
+
+The same package has the [`ef-crud` processor](ef-crud.md): `AddEntityFrameworkCrud<AppDbContext>(…)` lets admins build – or
+scaffold from the model – list, get, create, update, patch and delete endpoints on the entities and fields you allowlist, with
+ETags, tenant columns and interceptors. It works on any context, with or without the definition tables; it needs no schema of its own.

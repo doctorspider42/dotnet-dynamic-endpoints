@@ -24,6 +24,8 @@
 | `GET` | `/export?id=…&format=json\|yaml` | definitions in the stable export format |
 | `POST` | `/import?mode=create\|upsert\|sync&dryRun=true` | import an export; the dry run is the diff |
 | `POST` | `/import/openapi?mode=create\|upsert\|sync&processor=&processorByTag=tag:processor&mock=&documentId=&routePrefix=&group=&tag=&enabled=&skipInvalid=&dryRun=` | endpoints from an OpenAPI 3.x document (or `{ document, options }`): a processor per operation, mocks, re-imports with a diff |
+| `GET` | `/crud/entities` | entities the [`ef-crud`](ef-crud.md) processor may use, with fields and operations (DynamicEndpoints.EntityFrameworkCore) |
+| `POST` | `/scaffold/crud?entity=&routePrefix=&group=&operation=&enabled=&dryRun=` | CRUD endpoints generated from the EF model ([scaffolding](ef-crud.md#scaffolding-from-the-model)) |
 | `GET` | `/tenants` · `/?tenant=acme` | tenants that own endpoints, the endpoints of one tenant ([multi-tenancy](multi-tenancy.md)) |
 | `GET` | `/audit` · `/{id}/audit` | the [audit log](audit-log.md), when a queryable sink is configured |
 
@@ -74,7 +76,8 @@ reads it on start.
   "tenant": null,
   "revisions": true,
   "auditLog": true,
-  "formats": ["json", "yaml"]
+  "formats": ["json", "yaml"],
+  "features": ["crud"]
 }
 ```
 
@@ -85,3 +88,4 @@ reads it on start.
 | `revisions` | the store keeps drafts and history (`IDynamicEndpointRevisionStore`) |
 | `auditLog` | a queryable audit log is configured, so `/audit` and `/{id}/audit` answer |
 | `formats` | text formats of `/export`, `/import` and `/import/openapi`: `json`, plus `yaml` with `AddYamlFormat()` |
+| `features` | features other packages added: `crud` with `AddEntityFrameworkCrud()` (DynamicEndpoints.EntityFrameworkCore) when the admin API's tenant may use at least one entity – `/crud/entities` and `/scaffold/crud` |

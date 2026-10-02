@@ -49,6 +49,40 @@ If you drop the change set instead of saving, nothing is routed. A stale revisio
 `DbUpdateConcurrencyException`. If you use explicit transactions, `manager.BeginChanges(HttpContext.RequestServices)` saves
 through your scoped DbContext, inside `db.Database.BeginTransactionAsync()`.
 
+## Your entities as CRUD endpoints: `ef-crud`
+
+```csharp
+builder.Services.AddDynamicEndpoints()
+    .AddEntityFrameworkCrud<AppDbContext>(crud => crud
+        .Entity<Product>(e => e                       // "products" – the DbSet property name
+            .Fields(p => p.Id, p => p.Sku, p => p.Name, p => p.Price)
+            .ReadOnly(p => p.CreatedAt)
+            .Filterable(p => p.Name, p => p.Price)
+            .Sortable(p => p.Name)
+            .TenantColumn(p => p.TenantId)
+            .Operations(CrudOperations.All & ~CrudOperations.Delete))
+        .Entity<Order>("orders", e => e.AllFields(except: o => o.InternalNote)));
+```
+
+Admins then build list, get, create, update, patch and delete endpoints on those entities – `"processor": "ef-crud",
+"processorConfig": { "entity": "products", "operation": "list", "pageSize": 50, "sort": "name" }` – or scaffold all of them from
+the EF model (`POST /scaffold/crud?entity=products&dryRun=true` in the admin API, *Scaffold CRUD* in the panel,
+`IDynamicCrudScaffolder` in code).
+
+- **Allowlist:** only exposed entities and fields; definitions store the entity name, never a type. Request bodies are never bound
+  to entities – only declared body parameters that are writable fields are written. Keys, generated values, concurrency tokens,
+  shadow properties and the tenant column are read-only; navigations are never exposed. `AllFields()` also exposes properties
+  added later.
+- **Lists:** `page`/`pageSize` with a `maxPageSize`, sorting and filters (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains`,
+  `startsWith`, `in`) on allowlisted fields only, built as expression trees with parameters.
+- **Concurrency:** `ETag` from the concurrency token, `If-Match` on update, patch and delete (`412`, `428` with `requireIfMatch`).
+- **Tenants:** `TenantColumn(…)` filters every query by the endpoint's (or request's) tenant and stamps new rows; entities without
+  one are for shared endpoints only, unless `SharedAcrossTenants()` or `AllowTenants(…)`.
+- **Hooks:** `IDynamicCrudInterceptor<TEntity>` in DI, before and after create, update and delete, can reject with validation errors.
+- **Code:** `DynamicEndpoint.Get("/products").HandledByCrud<Product>(CrudOperation.List, c => c.PageSize = 20)`.
+
+📖 [CRUD on EF Core entities](https://doctorspider42.github.io/dotnet-dynamic-endpoints/articles/ef-crud.html)
+
 ## How it is stored
 
 - **Columns:** the searchable fields (method, route, name, enabled, version, timestamps).

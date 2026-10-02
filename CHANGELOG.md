@@ -172,6 +172,32 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - The sample registers the built-in processors, `sql-query` on its own database, YAML, multi-tenancy (`X-Tenant` header) with a
   tenant admin API and panel (`/admin/tenants/acme/`), per-tenant OpenAPI documents, rate limiting and output caching, and seeds
   a cached and rate-limited `GET /products/{sku}`, an SQL report and a tenant endpoint.
+- **CRUD on EF Core entities: the `ef-crud` processor** (`DynamicEndpoints.EntityFrameworkCore`). `AddEntityFrameworkCrud<TContext>(crud =>
+  crud.Entity<Product>(e => e.Fields(…).ReadOnly(…).Filterable(…).Sortable(…).TenantColumn(…).Operations(…)))` allowlists entities and
+  fields; `AllFields(except: …)` exposes every mapped scalar property, with keys, store-generated values, concurrency tokens and shadow
+  properties read-only and navigations left out. Entity names default to `[DynamicEntity]`, then the `DbSet` property name with a
+  lower-case first letter (`Products` → `products`); definitions store the name, never a type. The configuration
+  (`entity`, `operation` – `list`, `get`, `create`, `update`, `patch`, `delete` – `key`, `pageSize`, `maxPageSize`, `sort`,
+  `sortParameter`, `filters`, `requireIfMatch`) is checked against the allowlist and the definition on save and again before every
+  request. Only declared body parameters that are writable fields are written; responses project to the exposed fields. Lists
+  page with `page`/`pageSize` (`{ items, page, pageSize, total }`), sort and filter on allowlisted fields only (`eq`, `ne`, `lt`, `lte`,
+  `gt`, `gte`, `contains`, `startsWith`, `in`) through expression trees with parameters. Concurrency tokens become `ETag`s, checked
+  against `If-Match` (`412`, `409`, `428`); create answers `201` with `Location`. `TenantColumn(…)` filters every query by the
+  endpoint's – for shared endpoints the request's – tenant and stamps new rows; entities without one are off limits for tenants'
+  endpoints unless `SharedAcrossTenants()` or `AllowTenants(…)`. `IDynamicCrudInterceptor<TEntity>` runs before and after writes and
+  can reject them. The configuration is checked against the EF model on start.
+- **CRUD scaffolding from the EF model.** `IDynamicCrudScaffolder.ScaffoldAsync("products", options)` generates the endpoints an
+  entity allows – key in the route, typed parameters with required, max length, decimal ranges and enum values, paging, sort and
+  filter parameters – through the transfer like the OpenAPI import: same result shape, existing routes skipped, nothing written when
+  one is invalid, disabled unless `Enabled`, origin `{ "kind": "ef-crud" }`. Admin API: `POST /scaffold/crud?entity=…&dryRun=true`
+  and `GET /crud/entities`; a tenant's admin API scopes both to its tenant. `DynamicEndpoint.HandledByCrud<TEntity>(operation, …)`
+  selects the processor in code. The OpenAPI document shows the exposed fields, the list envelope, `ETag`, `If-Match`, `201`, `204`,
+  `404`, `409`, `412` and `428` of `ef-crud` endpoints.
+- `DynamicEndpointsAdminInfo.Features` (`GET /info`): features other packages added to the admin API, e.g. `crud`.
+- Admin panel: a form for the `ef-crud` configuration (entity picker, operations, fields with their filter operators) and a
+  *Scaffold CRUD* wizard with a dry run, shown when `/info` reports `crud`.
+- Sample: a `Product` entity with a tenant column exposed through `ef-crud`, an interceptor, and scaffolded `/shop/products`
+  endpoints (the local SQLite demo database is recreated when it has no products table).
 
 ### Changed
 

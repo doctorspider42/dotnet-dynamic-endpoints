@@ -13,8 +13,15 @@
   safety net, not a sandbox. Give it a database user that can read exactly what the endpoints may expose. With multi-tenancy,
   a tenant's endpoints can only use the connections assigned to that tenant (`AllowTenants`), never the default one unless it's
   assigned ([built-in processors](built-in-processors.md#with-multi-tenancy)).
+- 🧾 **EF Core CRUD:** the `ef-crud` processor reaches only the entities and fields the application allowlisted with
+  `AddEntityFrameworkCrud` – admins pick an entity by name, never a type. Request bodies are never bound to entities: only declared
+  body parameters that are writable fields are written (keys, generated values, concurrency tokens and the tenant column never),
+  and responses project to the exposed fields. Filters and sorting accept allowlisted fields only and run as expression trees with
+  parameters – no dynamic LINQ, no SQL. Rows of entities with a tenant column are always filtered by the tenant, and entities without
+  one are off limits for tenants unless allowed. `AllFields()` exposes columns added later too – prefer `Fields(…)` for tables that
+  may grow secrets ([ef-crud](ef-crud.md)).
 - 📥 **Imports** (export/import, OpenAPI) are validated as a whole like any definition, and nothing is written when one is
-  invalid. Imported OpenAPI skeletons are disabled until somebody reviewed them.
+  invalid. Imported OpenAPI skeletons and scaffolded CRUD endpoints are disabled until somebody reviewed them.
 - 🖥️ **Admin panel:** holds no data, sets `X-Content-Type-Options: nosniff`, `frame-ancestors 'none'` and
   `Referrer-Policy: no-referrer`. Secure the admin API it talks to, not only the panel.
 - 🏢 **Tenants:** a tenant's admin API only sees and changes the tenant's endpoints, drafts and history; secure it with a policy
