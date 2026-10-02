@@ -20,6 +20,25 @@ public sealed record DynamicEndpointsAdminInfo
 
     /// <summary>Text formats of <c>/export</c> (<c>?format=</c>), <c>/import</c> and <c>/import/openapi</c>, e.g. <c>json</c>, <c>yaml</c>.</summary>
     public IReadOnlyList<string> Formats { get; init; } = [];
+
+    /// <summary>
+    /// Features other packages added to this admin API, e.g. <c>crud</c> (the <c>ef-crud</c> processor of
+    /// DynamicEndpoints.EntityFrameworkCore with <c>GET /crud/entities</c> and <c>POST /scaffold/crud</c>). A tenant's admin API
+    /// lists only what its tenant can use.
+    /// </summary>
+    public IReadOnlyList<string> Features { get; init; } = [];
+}
+
+/// <summary>
+/// Adds endpoints to every admin API (<c>MapDynamicEndpointsAdmin</c>, <c>MapDynamicEndpointsTenantAdmin</c>) – how other packages of
+/// the library plug in. A tenant's admin API applies its tenant filter to them as well.
+/// </summary>
+internal interface IDynamicEndpointsAdminApiExtension
+{
+    void Map(Microsoft.AspNetCore.Routing.RouteGroupBuilder group);
+
+    /// <summary>Names for <see cref="DynamicEndpointsAdminInfo.Features"/>, for the admin API (and tenant) of <paramref name="context"/>.</summary>
+    IEnumerable<string> Features(Microsoft.AspNetCore.Http.HttpContext context);
 }
 
 /// <summary>How requests are assigned to tenants – part of <see cref="DynamicEndpointsAdminInfo"/>.</summary>

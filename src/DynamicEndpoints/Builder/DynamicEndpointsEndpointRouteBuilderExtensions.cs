@@ -222,6 +222,10 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
 
         MapRevisions(group, root);
         DynamicEndpointsAuditApi.Map(group);
+        foreach (var extension in endpoints.ServiceProvider.GetServices<IDynamicEndpointsAdminApiExtension>())
+        {
+            extension.Map(group);
+        }
 
         return group;
     }
@@ -399,6 +403,10 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
     // Tenant of a tenant admin API request, for handlers that don't go through the manager.
     internal const string AdminTenantKey = "DynamicEndpoints.AdminTenant";
 
+    /// <summary>The tenant of a tenant admin API request; <c>null</c> in the full admin API.</summary>
+    internal static string? AdminTenant(HttpContext http) =>
+        http.Items.TryGetValue(AdminTenantKey, out var tenant) ? tenant as string : null;
+
     // A tenant's admin API always shows requests of its tenant; otherwise ?tenant=, else the definition's own tenant.
     // In a tenant admin API an unsaved definition belongs to the API's tenant, whatever its body says – like when it is saved.
     private static DynamicEndpointDefinition OwnTenant(HttpContext http, DynamicEndpointDefinition definition) =>
@@ -423,6 +431,8 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
             Revisions = services.GetService<IDynamicEndpointStore>() is IDynamicEndpointRevisionStore,
             AuditLog = services.GetService<IDynamicEndpointAuditLog>() is not null,
             Formats = formats.Select(f => f.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            Features = services.GetServices<IDynamicEndpointsAdminApiExtension>().SelectMany(e => e.Features(http))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
         };
     }
 
