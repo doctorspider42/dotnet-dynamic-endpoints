@@ -61,6 +61,10 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | 📧 **Built-in formats** | E-mail, URI, phone (E.164), IPv4/IPv6, time, date, date-time, UUID. No code needed. |
 | 🪶 **Zero dependencies** | The core depends on ASP.NET Core only. The JSON Schema subset and the JsonLogic engine are built in. |
 | ⚙️ **Processors** | Your code, your DI, your database. Validated input goes to a regular, statically typed handler. |
+| 🔋 **Batteries included** | Opt-in HTTP forward, webhook (retries, HMAC), response templates and read-only SQL processors. |
+| ⏱️ **Caching & rate limits** | `Cache-Control`, ETags/304, output caching, rate limits and quotas – set per endpoint, in the definition. |
+| 🔁 **GitOps** | Stable export, import with upsert/sync and dry-run diffs, the `dynamic-endpoints` CLI for CI, import from OpenAPI. |
+| ✂️ **Snippets** | Example requests and curl, HTTPie and C# snippets for every endpoint. |
 | 📜 **OpenAPI 3.1 + Swagger UI** | Generated from the definitions and always current. Business rules show up in the docs. |
 | 🔐 **First-class citizens** | Authorization policies, rate limiting, CORS and endpoint conventions behave the same as on hand-written endpoints. |
 | 🚦 **Safe by design** | No code execution, ReDoS-proof regexes, body and depth limits, reserved prefixes, conflict detection. |
