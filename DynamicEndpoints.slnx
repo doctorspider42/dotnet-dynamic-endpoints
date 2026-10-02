@@ -14,6 +14,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DynamicEndpoints.Analyzers.Tests/DynamicEndpoints.Analyzers.Tests.csproj" />
+    <Project Path="tests/DynamicEndpoints.Benchmarks/DynamicEndpoints.Benchmarks.csproj" />
     <Project Path="tests/DynamicEndpoints.Tests/DynamicEndpoints.Tests.csproj" />
   </Folder>
 </Solution>
