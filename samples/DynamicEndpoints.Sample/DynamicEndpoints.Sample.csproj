@@ -16,6 +16,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DynamicEndpoints.EntityFrameworkCore\DynamicEndpoints.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\src\DynamicEndpoints.FluentValidation\DynamicEndpoints.FluentValidation.csproj" />
+    <!-- Package consumers get the analyzers automatically; project references need them wired up explicitly. -->
+    <ProjectReference Include="..\..\src\DynamicEndpoints.Analyzers\DynamicEndpoints.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
