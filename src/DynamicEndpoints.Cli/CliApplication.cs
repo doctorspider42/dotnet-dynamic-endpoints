@@ -34,7 +34,10 @@ internal static class CliApplication
           push <file>                   Import definitions (alias: import); --mode create|upsert|sync, --sync, --dry-run
           diff <file>                   Show what 'push --sync' would change; exit code 2 when there are differences
           import-openapi <file>         Create endpoint skeletons from an OpenAPI 3.x document (.json or .yaml);
-                                        --processor, --route-prefix, --group, --tag (repeatable), --enabled, --skip-invalid, --dry-run
+                                        --processor, --processor-by-tag <tag>=<processor> (repeatable), --mock,
+                                        --mode create|upsert|sync, --document-id, --route-prefix, --group, --tag (repeatable),
+                                        --options <file> (import options as JSON/YAML, e.g. processor configurations),
+                                        --enabled, --skip-invalid, --dry-run
 
         Connection (options or environment variables):
           -u, --url <url>               Admin API base URL, e.g. https://api.example.com/api/admin/endpoints   DYNAMIC_ENDPOINTS_URL
@@ -312,8 +315,9 @@ internal static class CliApplication
 
     private static async Task<int> ImportOpenApiAsync(HttpClient client, CliArguments arguments, CliEnvironment environment)
     {
-        var query = new List<string> { "dryRun=" + (arguments.Flag("--dry-run") ? "true" : "false") };
-        foreach (var (option, parameter) in new[] { ("--processor", "processor"), ("--route-prefix", "routePrefix"), ("--group", "group") })
+        var dryRun = arguments.Flag("--dry-run");
+        var query = new List<string> { "dryRun=" + (dryRun ? "true" : "false") };
+        foreach (var (option, parameter) in new[] { ("--processor", "processor"), ("--route-prefix", "routePrefix"), ("--group", "group"), ("--document-id", "documentId") })
         {
             if (arguments.Value(option) is { } value)
             {
@@ -321,24 +325,52 @@ internal static class CliApplication
             }
         }
 
-        query.AddRange(arguments.Values("--tag").Select(t => "tag=" + Uri.EscapeDataString(t)));
-        if (arguments.Flag("--enabled"))
+        if (arguments.Value("--mode") is { } mode)
         {
-            query.Add("enabled=true");
+            mode = mode.ToLowerInvariant();
+            if (mode is not ("create" or "upsert" or "sync"))
+            {
+                throw new CliUsageException($"Unknown mode '{mode}'. Use create, upsert or sync.");
+            }
+
+            query.Add("mode=" + mode);
         }
 
-        if (arguments.Flag("--skip-invalid"))
+        query.AddRange(arguments.Values("--tag").Select(t => "tag=" + Uri.EscapeDataString(t)));
+        foreach (var mapping in arguments.Values("--processor-by-tag"))
         {
-            query.Add("skipInvalid=true");
+            var separator = mapping.LastIndexOf('=');
+            if (separator <= 0 || separator == mapping.Length - 1)
+            {
+                throw new CliUsageException($"--processor-by-tag '{mapping}' must look like <tag>=<processor>.");
+            }
+
+            query.Add("processorByTag=" + Uri.EscapeDataString($"{mapping[..separator]}:{mapping[(separator + 1)..]}"));
+        }
+
+        foreach (var (flag, parameter) in new[] { ("--enabled", "enabled"), ("--skip-invalid", "skipInvalid"), ("--mock", "mock") })
+        {
+            if (arguments.Flag(flag))
+            {
+                query.Add(parameter + "=true");
+            }
         }
 
         var json = arguments.Flag("--json");
         var verbose = arguments.Flag("--verbose");
         var format = arguments.Value("--format");
+        var optionsFile = arguments.Value("--options");
         arguments.EnsureAllUsed();
         var file = SingleFile(arguments, "import-openapi");
         var document = await ReadDocumentAsync(file, format) ?? throw new CliUsageException($"'{file}' is empty.");
-        var dryRun = query[0] == "dryRun=true";
+
+        // Options with processor configurations (per tag, too) go in the body: { "document": …, "options": … }.
+        if (optionsFile is not null)
+        {
+            var options = await ReadDocumentAsync(optionsFile, null) as JsonObject ?? throw new CliUsageException($"'{optionsFile}' must contain an object of import options.");
+            document = new JsonObject { ["document"] = document, ["options"] = options };
+        }
+
         var (status, body) = await SendAsync(client, HttpMethod.Post, "import/openapi?" + string.Join("&", query),
             new StringContent(document.ToJsonString(), Encoding.UTF8, "application/json"),
             [HttpStatusCode.OK, HttpStatusCode.UnprocessableEntity]);
@@ -349,33 +381,79 @@ internal static class CliApplication
         }
         else
         {
-            foreach (var operation in body["operations"] as JsonArray ?? [])
-            {
-                var action = Text(operation?["action"]);
-                var symbol = action switch { "Create" => "+", "Invalid" => "!", _ => "·" };
-                environment.Out.WriteLine($"{symbol} {action?.ToLowerInvariant(),-9} {Text(operation?["method"]),-6} {Text(operation?["path"])}");
-                foreach (var (key, messages) in operation?["errors"] as JsonObject ?? [])
-                {
-                    foreach (var message in messages as JsonArray ?? [])
-                    {
-                        environment.Out.WriteLine($"      {key}: {Text(message)}");
-                    }
-                }
+            WriteOpenApiResult(environment.Out, body, dryRun, verbose);
+        }
 
-                if (verbose)
+        return status == HttpStatusCode.UnprocessableEntity || body["succeeded"]?.GetValue<bool>() == false ? ExitCodes.Failed : ExitCodes.Success;
+    }
+
+    private static void WriteOpenApiResult(TextWriter output, JsonNode body, bool dryRun, bool verbose)
+    {
+        foreach (var operation in body["operations"] as JsonArray ?? [])
+        {
+            var action = Text(operation?["action"]);
+            if (action == "Unchanged" && !verbose)
+            {
+                continue;
+            }
+
+            var (symbol, label) = action switch
+            {
+                "Create" => ("+", dryRun ? "create" : "created"),
+                "Update" => ("~", dryRun ? "update" : "updated"),
+                "Delete" => ("-", dryRun ? "delete" : "deleted"),
+                "Skip" => ("·", "skipped"),
+                "Invalid" => ("!", "invalid"),
+                _ => ("=", "unchanged"),
+            };
+            var line = $"{symbol} {label,-9} {Text(operation?["method"]),-6} {Text(operation?["path"])}";
+            if (action is not ("Skip" or "Delete") && Text(operation?["processor"]) is { Length: > 0 } processor)
+            {
+                line += $"  → {processor}";
+                if (Text(operation?["processorReason"]) is { Length: > 0 } reason)
                 {
-                    foreach (var note in operation?["unmapped"] as JsonArray ?? [])
-                    {
-                        environment.Out.WriteLine($"      not mapped: {Text(note)}");
-                    }
+                    line += $" ({reason})";
                 }
             }
 
-            var summary = $"{Count(body, "created")} {(dryRun ? "to create" : "created")}, {Count(body, "skipped")} skipped, {Count(body, "invalid")} invalid.";
-            environment.Out.WriteLine(body["succeeded"]?.GetValue<bool>() == false ? $"Rejected – nothing was written. {summary}" : summary);
+            if (operation?["changes"] is JsonArray { Count: > 0 } changes)
+            {
+                line += $"  [{string.Join(", ", changes.Select(Text))}]";
+            }
+
+            output.WriteLine(line);
+            if (action == "Skip" && Text(operation?["reason"]) is { Length: > 0 } why)
+            {
+                output.WriteLine($"      {why}");
+            }
+
+            foreach (var (key, messages) in operation?["errors"] as JsonObject ?? [])
+            {
+                foreach (var message in messages as JsonArray ?? [])
+                {
+                    output.WriteLine($"      {key}: {Text(message)}");
+                }
+            }
+
+            if (verbose)
+            {
+                foreach (var note in operation?["unmapped"] as JsonArray ?? [])
+                {
+                    output.WriteLine($"      not mapped: {Text(note)}");
+                }
+            }
         }
 
-        return status == HttpStatusCode.UnprocessableEntity ? ExitCodes.Failed : ExitCodes.Success;
+        var counts = $"{Count(body, "created")} to create, {Count(body, "updated")} to update, {Count(body, "deleted")} to delete, " +
+            $"{Count(body, "unchanged")} unchanged, {Count(body, "skipped")} skipped, {Count(body, "invalid")} invalid.";
+        if (body["succeeded"]?.GetValue<bool>() == false)
+        {
+            output.WriteLine($"Rejected – nothing was written. {counts}");
+        }
+        else
+        {
+            output.WriteLine(dryRun ? $"Dry run: {counts}" : $"Done: {counts.Replace("to create", "created").Replace("to update", "updated").Replace("to delete", "deleted")}");
+        }
     }
 
     // --- helpers ------------------------------------------------------------------------------------------------------

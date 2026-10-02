@@ -63,7 +63,7 @@ admin clicks "publish"  →  validated  →  persisted  →  routable on every i
 | ⚙️ **Processors** | Your code, your DI, your database. Validated input goes to a regular, statically typed handler. |
 | 🔋 **Batteries included** | Opt-in HTTP forward, webhook (retries, HMAC), response templates and read-only SQL processors. |
 | ⏱️ **Caching & rate limits** | `Cache-Control`, ETags/304, output caching, rate limits and quotas – set per endpoint, in the definition. |
-| 🔁 **GitOps** | Stable export, import with upsert/sync and dry-run diffs, the `dynamic-endpoints` CLI for CI, import from OpenAPI. |
+| 🔁 **GitOps** | Stable export, import with upsert/sync and dry-run diffs, the `dynamic-endpoints` CLI for CI, import from OpenAPI with a processor per operation, mock mode and re-import/sync. |
 | ✂️ **Snippets** | Example requests and curl, HTTPie and C# snippets for every endpoint. |
 | 📜 **OpenAPI 3.1 + Swagger UI** | Generated from the definitions and always current. Business rules show up in the docs. |
 | 🔐 **First-class citizens** | Authorization policies, rate limiting, CORS and endpoint conventions behave the same as on hand-written endpoints. |

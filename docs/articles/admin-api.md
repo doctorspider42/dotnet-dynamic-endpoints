@@ -23,7 +23,7 @@
 | `POST` | `/snippets?baseUrl=&tenant=` | the same for an unsaved definition (editor preview) |
 | `GET` | `/export?id=…&format=json\|yaml` | definitions in the stable export format |
 | `POST` | `/import?mode=create\|upsert\|sync&dryRun=true` | import an export; the dry run is the diff |
-| `POST` | `/import/openapi?processor=&routePrefix=&group=&tag=&enabled=&skipInvalid=&dryRun=` | skeletons from an OpenAPI 3.x document |
+| `POST` | `/import/openapi?mode=create\|upsert\|sync&processor=&processorByTag=tag:processor&mock=&documentId=&routePrefix=&group=&tag=&enabled=&skipInvalid=&dryRun=` | endpoints from an OpenAPI 3.x document (or `{ document, options }`): a processor per operation, mocks, re-imports with a diff |
 | `GET` | `/tenants` · `/?tenant=acme` | tenants that own endpoints, the endpoints of one tenant ([multi-tenancy](multi-tenancy.md)) |
 | `GET` | `/audit` · `/{id}/audit` | the [audit log](audit-log.md), when a queryable sink is configured |
 
@@ -38,7 +38,7 @@ More on the groups of routes:
 - **Drafts, revisions, diffs, rollback:** [Drafts, history & rollback](drafts-and-history.md). Stores without history answer `501`,
   a draft based on an outdated revision `409`.
 - **Export & import:** [Export, import & GitOps](export-import-gitops.md), with the `dynamic-endpoints` CLI.
-- **OpenAPI import:** [Import from OpenAPI](openapi-import.md).
+- **OpenAPI import:** [Import from OpenAPI](openapi-import.md) – processors per operation, mock mode, re-import and sync.
 - **A panel on top:** [`MapDynamicEndpointsAdminUI()`](admin-ui.md).
 
 ## Snippets

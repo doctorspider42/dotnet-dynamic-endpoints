@@ -44,15 +44,26 @@ internal sealed class DynamicEndpointTransfer(
         return new DynamicEndpointExport { Endpoints = DynamicEndpointExport.Sort(definitions).ToList() };
     }
 
-    public async Task<DynamicEndpointImportResult> ImportAsync(
+    public Task<DynamicEndpointImportResult> ImportAsync(
         DynamicEndpointExport import,
         DynamicEndpointImportOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ImportAsync(import, options, syncScope: null, cancellationToken);
+
+    /// <summary>
+    /// <see cref="ImportAsync(DynamicEndpointExport, DynamicEndpointImportOptions?, CancellationToken)"/> whose sync deletes only the
+    /// missing endpoints <paramref name="syncScope"/> accepts – e.g. those imported from one OpenAPI document.
+    /// </summary>
+    internal async Task<DynamicEndpointImportResult> ImportAsync(
+        DynamicEndpointExport import,
+        DynamicEndpointImportOptions? options,
+        Func<DynamicEndpointDefinition, bool>? syncScope,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(import);
         options ??= new DynamicEndpointImportOptions();
         var current = (await PublishedAsync(cancellationToken)).ToList();
-        var plan = Plan(import, options.Mode, current);
+        var plan = Plan(import, options.Mode, current, syncScope);
 
         // Rehearsal: the real change set logic against a store that only remembers the writes.
         await using (var scope = scopeFactory.CreateAsyncScope())
@@ -101,7 +112,11 @@ internal sealed class DynamicEndpointTransfer(
         Items = plan.Select(p => p.Item).ToList(),
     };
 
-    private static List<PlannedChange> Plan(DynamicEndpointExport import, DynamicEndpointImportMode mode, List<DynamicEndpointDefinition> current)
+    private static List<PlannedChange> Plan(
+        DynamicEndpointExport import,
+        DynamicEndpointImportMode mode,
+        List<DynamicEndpointDefinition> current,
+        Func<DynamicEndpointDefinition, bool>? syncScope)
     {
         var byId = current.ToDictionary(d => d.Id);
         var matched = new HashSet<Guid>();
@@ -153,7 +168,7 @@ internal sealed class DynamicEndpointTransfer(
 
         if (mode == DynamicEndpointImportMode.Sync)
         {
-            foreach (var orphan in DynamicEndpointExport.Sort(current.Where(c => !matched.Contains(c.Id))))
+            foreach (var orphan in DynamicEndpointExport.Sort(current.Where(c => !matched.Contains(c.Id) && (syncScope?.Invoke(c) ?? true))))
             {
                 plan.Add(new PlannedChange(new DynamicEndpointImportItem
                 {
@@ -228,7 +243,8 @@ internal sealed class DynamicEndpointTransfer(
         return node;
     }
 
-    private static string? RouteKey(DynamicEndpointDefinition d)
+    /// <summary>Method-independent identity of the route (<c>/orders/{id}</c> equals <c>/orders/{orderId}</c>); <c>null</c> when it can't be parsed.</summary>
+    internal static string? RouteKey(DynamicEndpointDefinition d)
     {
         try
         {

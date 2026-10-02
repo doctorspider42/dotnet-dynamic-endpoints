@@ -25,7 +25,7 @@ validated on save, persisted, and documented as OpenAPI 3.1.
 - ⚙️ **Processors:** validated input goes to your own, statically typed code with full DI.
 - 🔋 **Built-in processors (opt-in):** HTTP forward, webhook with retries and signatures, response templates.
 - ⏱️ **Per-endpoint caching and rate limits:** `Cache-Control`, ETags, output caching, rate limits and quotas in the definition.
-- 🔁 **GitOps:** stable export, import with upsert/sync and dry-run diffs, import from OpenAPI, request snippets.
+- 🔁 **GitOps:** stable export, import with upsert/sync and dry-run diffs, import from OpenAPI (processors per operation, mocks, re-import/sync), request snippets.
 - 📜 **OpenAPI 3.1:** generated from the definitions, ready for Swagger UI, with security schemes, common headers and hooks.
 - 🔐 **First-class endpoints:** authorization policies, rate limiting and conventions work as usual.
 - 🚦 **Safe by design:** no code execution, ReDoS-proof regexes, size limits, conflict detection.

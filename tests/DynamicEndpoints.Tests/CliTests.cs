@@ -1,6 +1,7 @@
 using DynamicEndpoints.Cli;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DynamicEndpoints.Tests;
 
@@ -92,6 +93,64 @@ public sealed class CliTests : IDisposable
 
         Assert.Equal(0, (await RunAsync(host, "import-openapi", file, "--processor", "echo", "--enabled")).ExitCode);
         Assert.Equal("""{"id":5}""", await host.Client.GetStringAsync("/things/5"));
+    }
+
+    [Fact]
+    public async Task Openapi_imports_map_processors_by_tag_mock_and_sync()
+    {
+        await using var host = await TestHost.StartAsync(configure: b => b.AddResponseTemplateProcessor());
+        var file = Path.Combine(_directory, "api.yaml");
+        await File.WriteAllTextAsync(file, """
+            openapi: 3.1.0
+            info: { title: Things, version: "1" }
+            paths:
+              /things/{id}:
+                get:
+                  operationId: getThing
+                  tags: [Things]
+                  parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+                  responses: { "200": { description: ok, content: { application/json: { example: { id: 1 } } } } }
+              /hello/{name}:
+                get:
+                  operationId: hello
+                  tags: [Greetings]
+                  parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+                  responses: { "200": { description: ok } }
+            """);
+        var options = Path.Combine(_directory, "options.json");
+        await File.WriteAllTextAsync(options, """{ "processorsByTag": { "Greetings": { "processor": "greeting", "processorConfig": { "greeting": "Hi" } } } }""");
+
+        var mock = await RunAsync(host, "import-openapi", file, "--mock", "--dry-run");
+        Assert.Equal(0, mock.ExitCode);
+        Assert.Contains("+ create    GET    /things/{id}  → response (mock: 200 with the documented example)", mock.Out);
+
+        var created = await RunAsync(host, "import-openapi", file, "--processor-by-tag", "Things=echo", "--options", options, "--enabled");
+        Assert.Equal(0, created.ExitCode);
+        Assert.Contains("+ created   GET    /things/{id}  → echo (tag 'Things')", created.Out);
+        Assert.Contains("Done: 2 created, 0 updated, 0 deleted", created.Out);
+        Assert.Equal("Hi, Ada!", await host.Client.GetStringAsync("/hello/Ada"));
+
+        await File.WriteAllTextAsync(file, """
+            openapi: 3.1.0
+            info: { title: Things, version: "2" }
+            paths:
+              /hello/{name}:
+                get:
+                  operationId: hello
+                  tags: [Greetings]
+                  parameters: [{ name: name, in: path, required: true, schema: { type: string, maxLength: 20 } }]
+                  responses: { "200": { description: ok } }
+              /status:
+                get: { operationId: status, x-dynamic-endpoints-processor: echo, responses: { "200": { description: ok } } }
+            """);
+        var sync = await RunAsync(host, "import-openapi", file, "-m", "sync", "--dry-run");
+        Assert.Equal(0, sync.ExitCode);
+        Assert.Contains("~ update    GET    /hello/{name}  → greeting (kept from the existing endpoint)  [parameters]", sync.Out);
+        Assert.Contains("- delete    GET    /things/{id}", sync.Out);
+        Assert.Contains("Dry run: 1 to create, 1 to update, 1 to delete", sync.Out);
+
+        Assert.Equal(3, (await RunAsync(host, "import-openapi", file, "--processor-by-tag", "nope")).ExitCode);
+        Assert.Equal(3, (await RunAsync(host, "import-openapi", file, "--mode", "merge")).ExitCode);
     }
 
     [Fact]
