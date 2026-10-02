@@ -1,0 +1,60 @@
+# samples/04-BuiltInProcessors – start it with: dotnet run --project samples/04-BuiltInProcessors
+@baseUrl = http://localhost:5104
+
+### http-forward with a response template
+GET {{baseUrl}}/customers/42
+
+### http-forward, relayed as it is (the fake CRM answers 404 above id 100)
+GET {{baseUrl}}/customers/101/raw
+
+### The fake CRM itself – it wants the API key the forward endpoint adds
+GET {{baseUrl}}/fake/crm/customers/42
+X-Api-Key: fake-crm-key
+
+### webhook: signed JSON payload, 202 once delivered
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{ "sku": "ANV-1", "quantity": 2 }
+
+### webhook to a flaky receiver: retried, "attempts": 2
+POST {{baseUrl}}/orders/flaky
+Content-Type: application/json
+
+{ "sku": "ROC-2" }
+
+### What the receivers got
+GET {{baseUrl}}/fake/webhooks
+
+### response: a fixed body and a header
+GET {{baseUrl}}/status
+
+### response: request → 201 response
+POST {{baseUrl}}/quotes
+Content-Type: application/json
+
+{ "sku": "MAG-3", "quantity": 3 }
+
+### response: text
+GET {{baseUrl}}/motd?name=Ada
+
+### sql-query: rows
+GET {{baseUrl}}/reports/products?minPrice=20
+
+### sql-query: one row, or 404
+GET {{baseUrl}}/reports/products/MAG-3
+
+### sql-query: a single value
+GET {{baseUrl}}/reports/stock-value
+
+### Rejected on save: the host isn't allowed
+POST {{baseUrl}}/api/admin/endpoints
+Content-Type: application/json
+
+{ "method": "GET", "route": "/elsewhere", "processor": "http-forward", "processorConfig": { "url": "https://example.com/" } }
+
+### Rejected on save: not a read-only statement
+POST {{baseUrl}}/api/admin/endpoints/validate
+Content-Type: application/json
+
+{ "method": "GET", "route": "/wipe", "processor": "sql-query", "processorConfig": { "query": "DELETE FROM \"Products\"" } }

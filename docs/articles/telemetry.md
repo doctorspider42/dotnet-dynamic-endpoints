@@ -39,7 +39,7 @@ All names are constants in `DynamicEndpointsTelemetry` (`Instruments`, `Activiti
 
 ## Together with the rest
 
-- **Multiple instances & Aspire:** the [Aspire AppHost](aspire-and-demo.md) runs the sample twice and shows the
+- **Multiple instances & Aspire:** the [Aspire AppHost](aspire-and-demo.md) runs the showcase app twice and shows the
   `dynamic_endpoints.*` instruments per endpoint and the spans in the Aspire dashboard.
 - **Multi-tenancy:** there is no tenant tag. Tenant endpoints are separate endpoints, so `dynamic_endpoint.id` tells them apart
   even on the same route; `http.route` is the route of the definition, without a tenant route prefix.

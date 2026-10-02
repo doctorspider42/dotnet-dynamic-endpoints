@@ -1,7 +1,18 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/01-QuickStart/DynamicEndpoints.Samples.QuickStart.csproj" />
+    <Project Path="samples/02-Validation/DynamicEndpoints.Samples.Validation.csproj" />
+    <Project Path="samples/03-CustomProcessors/DynamicEndpoints.Samples.CustomProcessors.csproj" />
+    <Project Path="samples/04-BuiltInProcessors/DynamicEndpoints.Samples.BuiltInProcessors.csproj" />
+    <Project Path="samples/05-EfCrud/DynamicEndpoints.Samples.EfCrud.csproj" />
+    <Project Path="samples/06-MultiTenancy/DynamicEndpoints.Samples.MultiTenancy.csproj" />
+    <Project Path="samples/07-OpenApiImport/DynamicEndpoints.Samples.OpenApiImport.csproj" />
+    <Project Path="samples/08-GitOps/DynamicEndpoints.Samples.GitOps.csproj" />
+    <Project Path="samples/09-DraftsHistoryAudit/DynamicEndpoints.Samples.DraftsHistoryAudit.csproj" />
+    <Project Path="samples/10-CachingAndRateLimits/DynamicEndpoints.Samples.CachingAndRateLimits.csproj" />
+    <Project Path="samples/11-Observability/DynamicEndpoints.Samples.Observability.csproj" />
     <Project Path="samples/DynamicEndpoints.AppHost/DynamicEndpoints.AppHost.csproj" />
-    <Project Path="samples/DynamicEndpoints.Sample/DynamicEndpoints.Sample.csproj" />
+    <Project Path="samples/Showcase/DynamicEndpoints.Samples.Showcase.csproj" />
     <Project Path="samples/DynamicEndpoints.ServiceDefaults/DynamicEndpoints.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/src/">
@@ -22,6 +33,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/DynamicEndpoints.Analyzers.Tests/DynamicEndpoints.Analyzers.Tests.csproj" />
     <Project Path="tests/DynamicEndpoints.Benchmarks/DynamicEndpoints.Benchmarks.csproj" />
+    <Project Path="tests/DynamicEndpoints.Samples.Tests/DynamicEndpoints.Samples.Tests.csproj" />
     <Project Path="tests/DynamicEndpoints.Tests/DynamicEndpoints.Tests.csproj" />
   </Folder>
 </Solution>

@@ -21,4 +21,4 @@ builder.Services.AddDynamicEndpoints(o => o.RefreshInterval = TimeSpan.FromMinut
   ([drafts](drafts-and-history.md)).
 - **Output caches** are evicted on every instance when a definition changes. **Rate limit counters** are kept per instance, so
   with N instances a client can get up to N times the limit ([caching & rate limits](caching-and-rate-limits.md)).
-- **See it run:** the [Aspire AppHost](aspire-and-demo.md) starts the sample twice on PostgreSQL with Redis notifications.
+- **See it run:** the [Aspire AppHost](aspire-and-demo.md) starts the showcase app twice on PostgreSQL with Redis notifications.

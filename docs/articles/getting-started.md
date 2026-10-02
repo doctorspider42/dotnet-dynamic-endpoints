@@ -78,8 +78,17 @@ public sealed class OrderProcessor(IBus bus) : DynamicEndpointProcessor<OrderCon
 }
 ```
 
+#### Run it
+
+The setup above – without the authorization, so you can click around – is the [`01-QuickStart` sample](samples.md):
+`dotnet run --project samples/01-QuickStart`, then open
+`http://localhost:5101/admin/`. The [other samples](samples.md) take one feature area each – validation, processors, the
+built-in processors, ef-crud, multi-tenancy, the OpenAPI import, GitOps, drafts and history, caching and rate limits,
+telemetry – in a small app of its own.
+
 #### Where to go next
 
+- [Samples](samples.md): a runnable app per feature, with a README and a `.http` file.
 - [Admin panel](admin-ui.md) and [drafts, history & rollback](drafts-and-history.md): let admins change endpoints safely.
 - [Built-in processors](built-in-processors.md): forward, webhook, response templates and SQL without writing a processor.
 - [Export, import & GitOps](export-import-gitops.md) and [import from OpenAPI](openapi-import.md): definitions in Git, pushed from CI.

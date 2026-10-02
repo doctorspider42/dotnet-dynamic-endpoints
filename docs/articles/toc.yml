@@ -4,6 +4,8 @@
   href: how-it-works.md
 - name: Project template
   href: project-template.md
+- name: Samples
+  href: samples.md
 - name: Defining endpoints
   items:
     - name: Definition model
@@ -66,7 +68,7 @@
       href: testing.md
     - name: Metrics & tracing
       href: telemetry.md
-    - name: Sample app, Aspire & live demo
+    - name: Showcase, Aspire & live demo
       href: aspire-and-demo.md
     - name: Analyzers
       href: analyzers.md

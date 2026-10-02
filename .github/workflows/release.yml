@@ -10,12 +10,13 @@ name: Release
 on:
   push:
     branches: [main]
-    # Documentation, the sample app and the benchmarks are not part of the packages – changes there alone don't release.
+    # Documentation, the samples (and their tests) and the benchmarks are not part of the packages – changes there alone don't release.
     paths-ignore:
       - README.md
       - docs/**
       - samples/**
       - tests/DynamicEndpoints.Benchmarks/**
+      - tests/DynamicEndpoints.Samples.Tests/**
       - dotnet-tools.json
       - .github/workflows/docs.yml
   workflow_dispatch:

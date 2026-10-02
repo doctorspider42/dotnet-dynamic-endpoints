@@ -1,0 +1,52 @@
+# samples/08-GitOps – start it with: dotnet run --project samples/08-GitOps
+@baseUrl = http://localhost:5108
+@ci = {{baseUrl}}/api/ci/endpoints
+@apiKey = ci-secret-key
+
+### Export as YAML – stable, sorted, with ids
+GET {{ci}}/export?format=yaml
+X-Api-Key: {{apiKey}}
+
+### Export as JSON
+GET {{ci}}/export
+X-Api-Key: {{apiKey}}
+
+### The plan: what a sync with endpoints.yaml would do
+POST {{ci}}/import?mode=sync&dryRun=true
+X-Api-Key: {{apiKey}}
+Content-Type: application/yaml
+
+< ./endpoints.yaml
+
+### Apply it
+POST {{ci}}/import?mode=sync
+X-Api-Key: {{apiKey}}
+Content-Type: application/yaml
+
+< ./endpoints.yaml
+
+### The result
+GET {{baseUrl}}/orders/7
+
+###
+POST {{baseUrl}}/orders
+Content-Type: application/json
+
+{ "sku": "ANV-1", "quantity": 2 }
+
+### 404 – deleted by the sync
+GET {{baseUrl}}/legacy
+
+### Invalid imports write nothing: 422
+POST {{ci}}/import?mode=upsert
+X-Api-Key: {{apiKey}}
+Content-Type: application/yaml
+
+format: dynamic-endpoints/v1
+endpoints:
+  - method: GET
+    route: /broken/{id}
+    processor: does-not-exist
+
+### 401 – the CI admin API needs its key
+GET {{ci}}

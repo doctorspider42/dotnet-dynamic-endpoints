@@ -1,0 +1,53 @@
+# The desired state of the endpoints, kept in Git and pushed from CI – see gitops.ps1 / gitops.sh.
+# Hand-written: no ids, so the endpoints are matched by method and route. An export (GET /export?format=yaml,
+# `dynamic-endpoints export -o endpoints.yaml`) writes the same format, with ids, sorted, stable – diffs show real changes only.
+format: dynamic-endpoints/v1
+endpoints:
+  - method: GET
+    route: /health
+    name: Health
+    group: Operations
+    processor: response
+    processorConfig:
+      body:
+        status: ok
+
+  - method: GET
+    route: /orders/{id}
+    name: Get order
+    group: Orders
+    processor: response
+    processorConfig:
+      body:
+        id: "{{id}}"
+        status: shipped
+    parameters:
+      - name: id
+        source: Route
+        type: Integer
+        required: true
+        minimum: 1
+        maximum: 1000000
+
+  - method: POST
+    route: /orders
+    name: Create order
+    group: Orders
+    processor: response
+    processorConfig:
+      statusCode: 201
+      body:
+        sku: "{{sku}}"
+        quantity: "{{quantity}}"
+        status: accepted
+    parameters:
+      - name: sku
+        source: Body
+        required: true
+        pattern: "^[A-Z]{3}-[0-9]{1,4}$"
+      - name: quantity
+        source: Body
+        type: Integer
+        required: true
+        minimum: 1
+        maximum: 100

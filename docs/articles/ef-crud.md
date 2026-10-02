@@ -135,7 +135,7 @@ collation. Queries are **expression trees** built from the allowlist – values 
 text and no raw SQL anywhere.
 
 > [!NOTE]
-> SQLite can't compare or sort `decimal` columns. Map them with `.HasConversion<double>()` there (the sample does), or don't make
+> SQLite can't compare or sort `decimal` columns. Map them with `.HasConversion<double>()` there (the [ef-crud sample](samples.md) does), or don't make
 > them filterable or sortable.
 
 ## Values
