@@ -210,4 +210,9 @@ public static class DynamicCrud
 
     /// <summary>Name of the admin API feature in <see cref="DynamicEndpointsAdminInfo.Features"/>: <c>crud</c>.</summary>
     public const string Feature = "crud";
+
+    /// <summary>
+    /// <see cref="DynamicEndpointOrigin.Kind"/> of scaffolded endpoints: <c>{ "kind": "ef-crud", "document": "products", "operation": "list" }</c>.
+    /// </summary>
+    public const string OriginKind = "ef-crud";
 }

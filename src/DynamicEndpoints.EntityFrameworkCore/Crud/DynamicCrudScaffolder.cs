@@ -297,6 +297,7 @@ internal sealed class DynamicCrudScaffolder(DynamicCrudCatalog catalog, IDynamic
             ProcessorConfig = DynamicEndpoint.ToObject(config),
             Parameters = parameters,
             Enabled = options.Enabled,
+            Origin = new DynamicEndpointOrigin { Kind = DynamicCrud.OriginKind, Document = entity.Name, Operation = DynamicCrudValidation.Name(operation) },
         };
     }
 

@@ -420,6 +420,7 @@ public sealed class EntityFrameworkCrudTests : IDisposable
 
         var create = preview["operations"]!.AsArray().Single(o => (string)o!["operation"]! == "create")!["definition"]!.Deserialize<DynamicEndpointDefinition>(DynamicEndpointsJson.SerializerOptions)!;
         Assert.False(create.Enabled);
+        Assert.Equal(new DynamicEndpointOrigin { Kind = "ef-crud", Document = "products", Operation = "create" }, create.Origin);
         var sku = create.Parameters.Single(p => p.Name == "sku");
         Assert.Equal((ParameterSource.Body, ParameterType.String, true, 20), (sku.Source, sku.Type, sku.Required, sku.MaxLength));
         var price = create.Parameters.Single(p => p.Name == "price");
