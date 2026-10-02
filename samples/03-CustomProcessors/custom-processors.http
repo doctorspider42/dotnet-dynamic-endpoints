@@ -1,0 +1,83 @@
+# samples/03-CustomProcessors – start it with: dotnet run --project samples/03-CustomProcessors
+@baseUrl = http://localhost:5103
+@apiKey = sample-api-key
+
+### Typed processor with a configuration
+GET {{baseUrl}}/hello/Ada
+
+### One processor, two configurations
+GET {{baseUrl}}/calc/sum?a=2&b=40
+
+###
+GET {{baseUrl}}/calc/average?values=1&values=2&values=6
+
+### Inline processor
+GET {{baseUrl}}/time?timeZone=Europe/Warsaw
+
+### DI and database access – create a note
+# @name note
+POST {{baseUrl}}/notes
+Content-Type: application/json
+
+{ "title": "Buy milk", "content": "2 litres" }
+
+###
+GET {{baseUrl}}/notes
+
+###
+GET {{baseUrl}}/notes/{{note.response.body.id}}
+
+### Filter: 401 without the API key
+DELETE {{baseUrl}}/notes/{{note.response.body.id}}
+
+### …204 with it
+DELETE {{baseUrl}}/notes/{{note.response.body.id}}
+X-Api-Key: {{apiKey}}
+
+### Filter on rejected requests: see the X-Validation-Errors header
+POST {{baseUrl}}/notes
+Content-Type: application/json
+
+{ "title": "x" }
+
+### File upload
+POST {{baseUrl}}/documents
+Content-Type: multipart/form-data; boundary=sample
+
+--sample
+Content-Disposition: form-data; name="title"
+
+Contract
+--sample
+Content-Disposition: form-data; name="file"; filename="contract.pdf"
+Content-Type: application/pdf
+
+%PDF-1.7 not really a PDF, but the content type says so
+--sample--
+
+### Handing work on: the validator parses the CSV once
+POST {{baseUrl}}/imports/csv
+Content-Type: application/json
+
+{ "csv": "sku,quantity\nANV-1,2\nROC-2,1" }
+
+### …a wrong header
+POST {{baseUrl}}/imports/csv
+Content-Type: application/json
+
+{ "csv": "name\nAda" }
+
+### Custom management API: publish an endpoint
+POST {{baseUrl}}/api/greetings
+Content-Type: application/json
+
+{ "slug": "pirate", "greeting": "Ahoy" }
+
+###
+GET {{baseUrl}}/greetings/pirate/Jack
+
+###
+GET {{baseUrl}}/api/greetings
+
+###
+DELETE {{baseUrl}}/api/greetings/pirate
