@@ -3,6 +3,7 @@ using DynamicEndpoints.Hosting;
 using DynamicEndpoints.Management;
 using DynamicEndpoints.Processing;
 using DynamicEndpoints.Runtime;
+using DynamicEndpoints.Tenancy;
 using DynamicEndpoints.Validation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -43,6 +44,7 @@ public static class DynamicEndpointsServiceCollectionExtensions
         services.TryAddSingleton<IDynamicOpenApiDocumentProvider, DynamicOpenApiDocumentProvider>();
         services.TryAddSingleton<IDynamicEndpointStore, InMemoryDynamicEndpointStore>();
         services.TryAddSingleton<IDynamicErrorResponseFactory, DefaultDynamicErrorResponseFactory>();
+        services.TryAddSingleton<DynamicEndpointTenantResolution>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DynamicEndpointsHostedService>());
 
         return new DynamicEndpointsBuilder(services);

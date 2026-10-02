@@ -1,11 +1,17 @@
+using DynamicEndpoints.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DynamicEndpoints.Runtime;
 
 /// <summary>The request delegate shared by every dynamic endpoint: filters → bind → validate → process.</summary>
-internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<DynamicRequestHandler> logger)
+internal sealed class DynamicRequestHandler(
+    ParameterBinder binder,
+    ILogger<DynamicRequestHandler> logger,
+    DynamicEndpointTenantResolution tenants,
+    IOptions<DynamicEndpointsOptions> options)
 {
     public async Task HandleAsync(HttpContext context, CompiledEndpoint endpoint)
     {
@@ -66,7 +72,8 @@ internal sealed class DynamicRequestHandler(ParameterBinder binder, ILogger<Dyna
         }
 
         var processor = context.RequestServices.GetRequiredKeyedService<IDynamicEndpointProcessor>(endpoint.ProcessorName);
-        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context, items));
+        var tenant = definition.Tenant ?? (options.Value.Tenancy.Enabled ? await tenants.ResolveAsync(context) : null);
+        var result = await processor.ProcessAsync(new DynamicRequest(endpoint, binding.Values, binding.Files, context, items, tenant));
         await (result ?? Results.Empty).ExecuteAsync(context);
     }
 

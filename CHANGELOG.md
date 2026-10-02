@@ -9,6 +9,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-tenancy.** `UseMultiTenancy(t => t.FromHeader("X-Tenant-Id"))` lets endpoints belong to a tenant
+  (`DynamicEndpointDefinition.Tenant`; `null` is a shared endpoint for every tenant). Routing serves each request the endpoints of
+  its tenant plus the shared ones, so several tenants can use the same route; conflicts are checked per tenant.
+  - Resolvers: `FromHeader`, `FromHost` (`acme.example.com` → `acme`), `FromClaim` (authenticates during routing when needed),
+    `FromRoutePrefix("/tenants/{tenant}")` (every dynamic endpoint is routed under the prefix), or your own
+    `IDynamicEndpointTenantResolver`. The first match wins; `HttpContext.GetDynamicEndpointTenantAsync()` and `DynamicRequest.Tenant`
+    return the result.
+  - Isolation: `manager.ForTenant(tenant)` and `store.ForTenant(tenant)` see and change only that tenant's endpoints and assign new
+    ones to it, change sets included.
+  - Admin API: `GET /?tenant=acme` and `GET /tenants`; `MapDynamicEndpointsTenantAdmin("/admin/tenants/{tenant}/endpoints")` maps a
+    tenant's own admin API.
+  - OpenAPI: `IDynamicOpenApiDocumentProvider.GetDocument(tenant)`, and `MapDynamicEndpointsOpenApi("/openapi/{tenant}/dynamic.json")`
+    serves one document per tenant.
+  - The tenant is stored in the serialized definition, so existing databases need no migration.
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

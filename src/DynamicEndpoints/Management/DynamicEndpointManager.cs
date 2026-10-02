@@ -82,6 +82,9 @@ internal sealed class DynamicEndpointManager(
         return new DynamicEndpointChangeSet(this, store);
     }
 
+    internal DynamicEndpointChangeSet BeginChanges(IDynamicEndpointStore store, Func<DynamicEndpointDefinition, DynamicEndpointDefinition> prepare) =>
+        new(this, store, prepare);
+
     public DynamicEndpointChangeSet BeginChanges(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);

@@ -24,16 +24,21 @@ public sealed class DynamicEndpointChangeSet
     private readonly DynamicEndpointManager _manager;
     private readonly IDynamicEndpointStore _store;
     private readonly List<StagedChange> _changes = [];
+    private readonly Func<DynamicEndpointDefinition, DynamicEndpointDefinition>? _prepare;
 
     // State of this unit of work, read before the store: what the definition looks like once the changes are saved.
     private readonly Dictionary<Guid, DynamicEndpointDefinition?> _definitions = [];
     private readonly Dictionary<Guid, CompiledEndpoint?> _compiled = [];
     private bool _applied;
 
-    internal DynamicEndpointChangeSet(DynamicEndpointManager manager, IDynamicEndpointStore store)
+    internal DynamicEndpointChangeSet(
+        DynamicEndpointManager manager,
+        IDynamicEndpointStore store,
+        Func<DynamicEndpointDefinition, DynamicEndpointDefinition>? prepare = null)
     {
         _manager = manager;
         _store = store;
+        _prepare = prepare;
     }
 
     /// <summary>Changes staged so far (with <see cref="DynamicEndpointChangeOrigin.Local"/>).</summary>
@@ -45,6 +50,7 @@ public sealed class DynamicEndpointChangeSet
     public Task<DynamicEndpointDefinition> CreateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        definition = Prepare(definition);
         return LockedAsync(async () =>
         {
             var id = definition.Id == Guid.Empty ? Guid.CreateVersion7() : definition.Id;
@@ -64,6 +70,7 @@ public sealed class DynamicEndpointChangeSet
     public Task<DynamicEndpointDefinition> UpdateAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        definition = Prepare(definition);
         return LockedAsync(async () =>
         {
             var current = await FindAsync(definition.Id, cancellationToken) ?? throw new DynamicEndpointNotFoundException(definition.Id);
@@ -84,6 +91,7 @@ public sealed class DynamicEndpointChangeSet
     public Task<DynamicEndpointDefinition> UpsertAsync(DynamicEndpointDefinition definition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        definition = Prepare(definition);
         return LockedAsync(async () =>
         {
             var current = definition.Id == Guid.Empty ? null : await FindAsync(definition.Id, cancellationToken);
@@ -195,6 +203,9 @@ public sealed class DynamicEndpointChangeSet
             _changes.RemoveAt(created);
         }
     }
+
+    // E.g. assigns the tenant of a tenant-scoped manager.
+    private DynamicEndpointDefinition Prepare(DynamicEndpointDefinition definition) => _prepare?.Invoke(definition) ?? definition;
 
     private async Task<DynamicEndpointDefinition?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         _definitions.TryGetValue(id, out var staged) ? staged : await _store.FindAsync(id, cancellationToken);

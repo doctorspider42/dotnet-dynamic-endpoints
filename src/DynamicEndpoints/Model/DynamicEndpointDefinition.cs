@@ -30,6 +30,12 @@ public sealed record DynamicEndpointDefinition
     public string? Group { get; init; }
 
     /// <summary>
+    /// Tenant the endpoint belongs to (multi-tenancy, see <c>UseMultiTenancy()</c>). It is routable only for requests resolved to
+    /// this tenant; <c>null</c> makes it a shared endpoint, routable for every tenant.
+    /// </summary>
+    public string? Tenant { get; init; }
+
+    /// <summary>
     /// Name of a registered <see cref="IDynamicEndpointProcessor"/> that handles validated requests.
     /// Falls back to <see cref="DynamicEndpointsOptions.DefaultProcessor"/> when empty.
     /// </summary>

@@ -26,6 +26,7 @@ internal static class DefinitionNormalizer
             AuthorizationPolicy = Clean(d.AuthorizationPolicy),
             RateLimitingPolicy = Clean(d.RateLimitingPolicy),
             Group = Clean(d.Group),
+            Tenant = Clean(d.Tenant),
             Parameters = (d.Parameters ?? []).Select(p => p with
             {
                 Name = (p.Name ?? string.Empty).Trim(),

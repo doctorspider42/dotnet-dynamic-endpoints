@@ -41,8 +41,9 @@ internal sealed partial class DynamicEndpointCompiler(
             errors.Add("method", $"HTTP method '{d.Method}' is not allowed. Allowed: {string.Join(", ", options.Value.AllowedMethods)}.");
         }
 
+        ValidateTenant(d, errors);
         var pattern = ParseRoute(d.Route, errors);
-        var parameters = CompileParameters(d, pattern, errors);
+        var parameters = CompileParameters(d, pattern, TenantRouteParameter, errors);
         var schema = BuildValidationSchema(d, errors);
         var rules = CompileRules(d, errors);
         var processorName = await ValidateProcessorAsync(d, errors, cancellationToken);
@@ -100,7 +101,8 @@ internal sealed partial class DynamicEndpointCompiler(
 
         try
         {
-            return RoutePatternFactory.Parse(route);
+            // With a tenant route prefix every dynamic endpoint lives under it: /orders -> /tenants/{tenant}/orders.
+            return RoutePatternFactory.Parse(TenantRoutePrefix is { } tenantPrefix ? tenantPrefix + route : route);
         }
         catch (RoutePatternException ex)
         {
@@ -109,7 +111,28 @@ internal sealed partial class DynamicEndpointCompiler(
         }
     }
 
-    private static List<CompiledParameter> CompileParameters(DynamicEndpointDefinition d, RoutePattern? pattern, ValidationErrors errors)
+    private string? TenantRoutePrefix => options.Value.Tenancy is { Enabled: true, RoutePrefix: { } prefix } ? prefix : null;
+
+    private string? TenantRouteParameter => TenantRoutePrefix is null ? null : options.Value.Tenancy.RouteParameter;
+
+    private void ValidateTenant(DynamicEndpointDefinition d, ValidationErrors errors)
+    {
+        if (d.Tenant is null)
+        {
+            return;
+        }
+
+        if (!options.Value.Tenancy.Enabled)
+        {
+            errors.Add("tenant", "Multi-tenancy is not enabled – call UseMultiTenancy() to assign endpoints to tenants.");
+        }
+        else if (!DynamicEndpointsTenancyOptions.IsValidTenant(d.Tenant))
+        {
+            errors.Add("tenant", "A tenant id may contain only letters, digits, '-', '_' and '.' (at most 100 characters).");
+        }
+    }
+
+    private static List<CompiledParameter> CompileParameters(DynamicEndpointDefinition d, RoutePattern? pattern, string? tenantParameter, ValidationErrors errors)
     {
         var compiled = new List<CompiledParameter>();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -187,6 +210,12 @@ internal sealed partial class DynamicEndpointCompiler(
         {
             foreach (var routeParameter in pattern.Parameters)
             {
+                // The tenant parameter of the route prefix is bound by the library; a definition may still read it.
+                if (string.Equals(routeParameter.Name, tenantParameter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 if (!d.Parameters.Any(p => p.Source == ParameterSource.Route &&
                         string.Equals(p.EffectiveSourceName, routeParameter.Name, StringComparison.OrdinalIgnoreCase)))
                 {

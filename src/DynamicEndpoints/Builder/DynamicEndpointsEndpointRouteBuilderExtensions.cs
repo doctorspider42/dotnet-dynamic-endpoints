@@ -4,6 +4,7 @@ using DynamicEndpoints.Runtime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.AspNetCore.Builder;
@@ -47,8 +48,13 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
         var root = prefix.TrimEnd('/');
         var group = endpoints.MapGroup(prefix).WithTags("Dynamic endpoints administration");
 
-        group.MapGet("/", (IDynamicEndpointManager manager, CancellationToken ct) => manager.ListAsync(ct))
-            .WithSummary("Lists all endpoint definitions with their runtime status.");
+        group.MapGet("/", (IDynamicEndpointManager manager, string? tenant, CancellationToken ct) => ListAsync(manager, tenant, ct))
+            .WithSummary("Lists all endpoint definitions with their runtime status – optionally only those of one tenant.");
+
+        group.MapGet("/tenants", async (IDynamicEndpointManager manager, CancellationToken ct) =>
+                (await manager.ListAsync(ct)).Select(s => s.Definition.Tenant).OfType<string>()
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList())
+            .WithSummary("Lists the tenants that own endpoints.");
 
         group.MapGet("/processors", (IDynamicEndpointManager manager) => manager.Processors)
             .WithSummary("Lists processors that can handle dynamic endpoints.");
@@ -60,11 +66,13 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
                 await manager.GetAsync(id, ct) is { } state ? TypedResults.Ok(state) : TypedResults.NotFound())
             .WithSummary("Gets a single endpoint definition.");
 
-        group.MapPost("/", (DynamicEndpointDefinition definition, IDynamicEndpointManager manager, CancellationToken ct) =>
+        group.MapPost("/", (DynamicEndpointDefinition definition, IDynamicEndpointManager manager, HttpContext http, CancellationToken ct) =>
                 Guard(async () =>
                 {
                     var created = await manager.CreateAsync(definition, ct);
-                    return TypedResults.Created($"{root}/{created.Id}", created);
+                    // Prefixes with parameters (a tenant's admin API) take the actual path.
+                    var location = root.Contains('{') ? http.Request.Path.Value!.TrimEnd('/') : root;
+                    return TypedResults.Created($"{location}/{created.Id}", created);
                 }))
             .WithSummary("Creates and publishes an endpoint.")
             .Produces<DynamicEndpointDefinition>(StatusCodes.Status201Created)
@@ -107,11 +115,70 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
         return group;
     }
 
-    /// <summary>Serves the OpenAPI 3.1 document of the active dynamic endpoints – point Swagger UI / Scalar at it.</summary>
+    /// <summary>
+    /// Maps the management REST API of a single tenant: it sees and changes only that tenant's endpoints, and new ones are assigned
+    /// to it. The tenant comes from the route parameter of <paramref name="prefix"/> (e.g. <c>/admin/tenants/{tenant}/endpoints</c>),
+    /// or from the resolvers of <c>UseMultiTenancy()</c> when the prefix has none. Secure it with a policy that checks the user
+    /// belongs to the tenant.
+    /// </summary>
+    public static RouteGroupBuilder MapDynamicEndpointsTenantAdmin(this IEndpointRouteBuilder endpoints, string prefix = "/_dynamic-endpoints/tenants/{tenant}")
+    {
+        var routeParameter = RoutePatternFactory.Parse(prefix).Parameters.FirstOrDefault()?.Name;
+        if (prefix.IndexOf('{') is > 0 and var literal)
+        {
+            endpoints.ServiceProvider.GetRequiredService<RouteInspector>().Reserve(prefix[..literal]);
+        }
+
+        var group = endpoints.MapDynamicEndpointsAdmin(prefix).WithTags("Dynamic endpoints administration (tenant)");
+        group.AddEndpointFilter(async (context, next) =>
+        {
+            var http = context.HttpContext;
+            var tenant = routeParameter is not null && http.Request.RouteValues.TryGetValue(routeParameter, out var value)
+                ? value?.ToString()
+                : await http.GetDynamicEndpointTenantAsync();
+            if (!DynamicEndpointsTenancyOptions.IsValidTenant(tenant))
+            {
+                return TypedResults.Problem("The request has no valid tenant.", statusCode: StatusCodes.Status404NotFound);
+            }
+
+            // Every handler works on the tenant's view of the manager.
+            for (var i = 0; i < context.Arguments.Count; i++)
+            {
+                if (context.Arguments[i] is IDynamicEndpointManager manager)
+                {
+                    context.Arguments[i] = manager.ForTenant(tenant);
+                }
+            }
+
+            http.Items[AdminTenantKey] = tenant;
+            return await next(context);
+        });
+        return group;
+    }
+
+    /// <summary>
+    /// Serves the OpenAPI 3.1 document of the active dynamic endpoints – point Swagger UI / Scalar at it. With multi-tenancy it is
+    /// the document of the request's tenant: from a <c>{tenant}</c> route parameter (<c>/openapi/{tenant}/dynamic.json</c>) or the
+    /// tenant resolvers; without a tenant it lists the shared endpoints.
+    /// </summary>
     public static IEndpointConventionBuilder MapDynamicEndpointsOpenApi(this IEndpointRouteBuilder endpoints, string pattern = "/openapi/dynamic-endpoints.json") =>
-        endpoints.MapGet(pattern, (IDynamicOpenApiDocumentProvider provider) =>
-                Results.Text(provider.GetDocument().ToJsonString(IndentedJson), "application/json"))
+        endpoints.MapGet(pattern, async (HttpContext http, IDynamicOpenApiDocumentProvider provider) =>
+            {
+                var tenant = http.Request.RouteValues.TryGetValue("tenant", out var value) && value?.ToString() is { Length: > 0 } fromRoute
+                    ? fromRoute
+                    : await http.GetDynamicEndpointTenantAsync();
+                var document = tenant is null ? provider.GetDocument() : provider.GetDocument(tenant);
+                return Results.Text(document.ToJsonString(IndentedJson), "application/json");
+            })
             .ExcludeFromDescription();
+
+    // Tenant of a tenant admin API request, for handlers that don't go through the manager.
+    internal const string AdminTenantKey = "DynamicEndpoints.AdminTenant";
+
+    private static async Task<IReadOnlyList<DynamicEndpointState>> ListAsync(IDynamicEndpointManager manager, string? tenant, CancellationToken ct) =>
+        tenant is null ? await manager.ListAsync(ct)
+        : DynamicEndpointsTenancyOptions.IsValidTenant(tenant) ? await manager.ForTenant(tenant).ListAsync(ct)
+        : [];
 
     private static async Task<IResult> Guard(Func<Task<IResult>> action)
     {
