@@ -23,6 +23,7 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\samples\01-QuickStart\DynamicEndpoints.Samples.QuickStart.csproj" Aliases="QuickStart" />
+    <ProjectReference Include="..\..\samples\02-Validation\DynamicEndpoints.Samples.Validation.csproj" Aliases="Validation" />
   </ItemGroup>
 
 </Project>
