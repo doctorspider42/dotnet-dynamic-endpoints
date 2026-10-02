@@ -321,8 +321,16 @@ await changes.ApplyAsync(ct);                                       // routing t
 | `POST` | `/validate` | dry run |
 | `POST` | `/reload` | re-read the store |
 | `GET` | `/processors` · `/validators` | building blocks for the UI |
+| `GET` | `/{id}/snippets?baseUrl=` | example request + curl, HTTPie and C# snippets |
+| `POST` | `/snippets?baseUrl=` | the same for an unsaved definition (editor preview) |
 
 It returns a `RouteGroupBuilder`, so secure it like any group: `.RequireAuthorization("admin")`. The prefix is reserved automatically.
+
+**Snippets.** The example request is built from parameter examples, then defaults, allowed values and finally values that satisfy
+the constraints (`Range(5, 100)` → `5`, `Email()` → `user@example.com`, `MinLength(8)` → `stringxx`, custom object schemas
+property by property). Optional parameters with a default and no example are left out. Documented required headers
+(`o.OpenApi.AddHeader(…, required: true)`) and credentials of the security schemes show up as placeholders (`<api-key>`,
+`Bearer <token>`). `baseUrl` defaults to the address the admin API was called on. In code: `IDynamicEndpointSnippetGenerator`.
 </details>
 
 <details>

@@ -97,6 +97,27 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
                 manager.ValidateAsync(definition, ct))
             .WithSummary("Validates a definition without saving it.");
 
+        group.MapGet("/{id:guid}/snippets", async Task<IResult> (Guid id, string? baseUrl, HttpContext context, IDynamicEndpointManager manager,
+                IDynamicEndpointSnippetGenerator snippets, CancellationToken ct) =>
+            {
+                if (ResolveBaseUrl(context, baseUrl) is not { } url)
+                {
+                    return BadBaseUrl();
+                }
+
+                return await manager.GetAsync(id, ct) is { } state
+                    ? TypedResults.Ok(snippets.Generate(state.Definition, url))
+                    : TypedResults.NotFound();
+            })
+            .WithSummary("Generates an example request and curl, HTTPie and C# snippets for an endpoint.")
+            .Produces<DynamicEndpointSnippets>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("/snippets", (DynamicEndpointDefinition definition, string? baseUrl, HttpContext context, IDynamicEndpointSnippetGenerator snippets) =>
+                ResolveBaseUrl(context, baseUrl) is { } url ? TypedResults.Ok(snippets.Generate(definition, url)) : BadBaseUrl())
+            .WithSummary("Generates an example request and snippets for an unsaved definition (editor preview).")
+            .Produces<DynamicEndpointSnippets>();
+
         group.MapPost("/reload", async (IDynamicEndpointManager manager, CancellationToken ct) =>
             {
                 await manager.ReloadAsync(ct);
@@ -112,6 +133,20 @@ public static class DynamicEndpointsEndpointRouteBuilderExtensions
         endpoints.MapGet(pattern, (IDynamicOpenApiDocumentProvider provider) =>
                 Results.Text(provider.GetDocument().ToJsonString(IndentedJson), "application/json"))
             .ExcludeFromDescription();
+
+    // The application's own address by default; an explicit base URL must be absolute http(s).
+    private static string? ResolveBaseUrl(HttpContext context, string? baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}";
+        }
+
+        return Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? baseUrl.TrimEnd('/') : null;
+    }
+
+    private static IResult BadBaseUrl() =>
+        TypedResults.Problem("'baseUrl' must be an absolute http or https URL.", statusCode: StatusCodes.Status400BadRequest);
 
     private static async Task<IResult> Guard(Func<Task<IResult>> action)
     {

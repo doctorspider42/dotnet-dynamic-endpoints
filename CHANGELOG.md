@@ -9,6 +9,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Request snippets.** `GET /{id}/snippets` of the admin API (and `POST /snippets` for an unsaved definition) returns an example
+  request built from parameter examples, defaults, allowed values and constraints, plus ready-made curl, HTTPie and C# `HttpClient`
+  snippets. Required documented headers and the credentials of the security schemes appear as placeholders. In code:
+  `IDynamicEndpointSnippetGenerator`.
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

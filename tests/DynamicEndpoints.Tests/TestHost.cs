@@ -16,6 +16,8 @@ internal sealed class TestHost(WebApplication app) : IAsyncDisposable
 
     public IDynamicEndpointManager Manager => app.Services.GetRequiredService<IDynamicEndpointManager>();
 
+    public IServiceProvider Services => app.Services;
+
     public static async Task<TestHost> StartAsync(
         string? sqlitePath = null,
         Action<DynamicEndpointsOptions>? options = null,
